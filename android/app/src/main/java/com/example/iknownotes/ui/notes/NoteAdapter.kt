@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.databinding.ItemNoteBinding
 import com.example.iknownotes.util.NoteColorPalette
+import com.example.iknownotes.util.RichTextHelper
 
 class NoteAdapter(
     private val folderNameOf: (Int?) -> String?,
@@ -28,7 +29,7 @@ class NoteAdapter(
 
         fun bind(note: Note) {
             binding.tvTitle.text = note.title.ifBlank { "(Tanpa judul)" }
-            binding.tvContent.text = note.content
+            binding.tvContent.text = RichTextHelper.fromHtml(note.content)
             binding.ivPin.visibility = if (note.isPinned) android.view.View.VISIBLE else android.view.View.GONE
 
             val folderName = folderNameOf(note.folder)

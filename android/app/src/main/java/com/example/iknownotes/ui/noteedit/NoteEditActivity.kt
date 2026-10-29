@@ -16,6 +16,7 @@ import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteEditBinding
 import com.example.iknownotes.util.NoteColorPalette
+import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
 
@@ -51,10 +52,32 @@ class NoteEditActivity : AppCompatActivity() {
         binding.btnClose.setOnClickListener { finish() }
         binding.btnSave.setOnClickListener { save() }
 
+        setupFormattingToolbar()
         buildColorSwatches()
         loadFolders()
 
         if (isEditMode) loadExistingNote()
+    }
+
+    private fun setupFormattingToolbar() {
+        binding.btnBold.setOnClickListener {
+            RichTextHelper.applyBold(binding.etContent)
+        }
+        binding.btnItalic.setOnClickListener {
+            RichTextHelper.applyItalic(binding.etContent)
+        }
+        binding.btnUnderline.setOnClickListener {
+            RichTextHelper.applyUnderline(binding.etContent)
+        }
+        binding.btnStrikethrough.setOnClickListener {
+            RichTextHelper.applyStrikethrough(binding.etContent)
+        }
+        binding.btnBulletList.setOnClickListener {
+            RichTextHelper.applyBulletList(binding.etContent)
+        }
+        binding.btnNumberedList.setOnClickListener {
+            RichTextHelper.applyNumberedList(binding.etContent)
+        }
     }
 
     private fun buildColorSwatches() {
@@ -144,7 +167,7 @@ class NoteEditActivity : AppCompatActivity() {
                     setLoading(false)
                     existingNote = note
                     binding.etTitle.setText(note.title)
-                    binding.etContent.setText(note.content)
+                    binding.etContent.setText(RichTextHelper.fromHtml(note.content))
                     selectColor(note.color ?: "default")
                     setupFolderSpinner()
                 }
@@ -158,7 +181,7 @@ class NoteEditActivity : AppCompatActivity() {
 
     private fun save() {
         val title = binding.etTitle.text?.toString()?.trim().orEmpty()
-        val content = binding.etContent.text?.toString().orEmpty()
+        val content = RichTextHelper.toHtml(binding.etContent.text)
 
         if (title.isBlank()) {
             showSnackbar(getString(R.string.error_title_required))

@@ -14,6 +14,7 @@ import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteDetailBinding
 import com.example.iknownotes.ui.noteedit.NoteEditActivity
 import com.example.iknownotes.util.NoteColorPalette
+import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
 
@@ -78,7 +79,7 @@ class NoteDetailActivity : AppCompatActivity() {
         currentNote = note
         binding.progress.visibility = View.GONE
         binding.tvTitle.text = note.title
-        binding.tvContent.text = note.content
+        binding.tvContent.text = RichTextHelper.fromHtml(note.content)
         val folderName = folders.firstOrNull { it.id == note.folder }?.name
         if (folderName != null) {
             binding.tvFolder.text = folderName

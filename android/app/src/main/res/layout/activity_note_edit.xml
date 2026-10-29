@@ -51,7 +51,9 @@
 
         <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="84dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -119,6 +121,91 @@
 
             </LinearLayout>
         </ScrollView>
+
+        <!-- Floating Rich Text Formatting Toolbar (matching ui_ux.pdf) -->
+        <LinearLayout
+            android:id="@+id/layout_formatting_toolbar"
+            android:layout_width="wrap_content"
+            android:layout_height="46dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_rich_toolbar"
+            android:elevation="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
+            <TextView
+                android:id="@+id/btn_bold"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="B"
+                android:textColor="@color/blue_on_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Bold" />
+
+            <TextView
+                android:id="@+id/btn_italic"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="I"
+                android:textColor="@color/blue_on_primary"
+                android:textSize="17sp"
+                android:textStyle="italic"
+                android:fontFamily="serif"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Italic" />
+
+            <TextView
+                android:id="@+id/btn_underline"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="U"
+                android:textColor="@color/blue_on_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Underline" />
+
+            <ImageButton
+                android:id="@+id/btn_strikethrough"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_format_strikethrough"
+                app:tint="@color/blue_on_primary"
+                android:contentDescription="Strikethrough" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="22dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="#60FFFFFF" />
+
+            <ImageButton
+                android:id="@+id/btn_bullet_list"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_format_list_bulleted"
+                app:tint="@color/blue_on_primary"
+                android:contentDescription="Bullet list" />
+
+            <ImageButton
+                android:id="@+id/btn_numbered_list"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_format_list_numbered"
+                app:tint="@color/blue_on_primary"
+                android:contentDescription="Numbered list" />
+
+        </LinearLayout>
 
         <ProgressBar
             android:id="@+id/progress"
