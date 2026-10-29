@@ -22,6 +22,19 @@ class NoteSerializer(serializers.ModelSerializer):
         allow_null=True
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            self.fields['folder'].queryset = Folder.objects.filter(user=request.user)
+
+    def validate_folder(self, value):
+        if value is not None:
+            request = self.context.get('request')
+            if request and hasattr(request, 'user') and request.user.is_authenticated and value.user != request.user:
+                raise serializers.ValidationError("Folder tidak ditemukan.")
+        return value
+
     class Meta:
         model = Note
         fields = [
@@ -43,6 +56,7 @@ class NoteSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(

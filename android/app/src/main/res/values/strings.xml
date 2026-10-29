@@ -1,3 +1,57 @@
 <resources>
-    <string name="app_name">iknownotes</string>
+    <string name="app_name">IKnowNotes</string>
+    <string name="placeholder_empty"></string>
+
+    <!-- Login/Register -->
+    <string name="login_tagline">Catatan kamu, rapi &amp; gampang dicari</string>
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="action_login">Masuk</string>
+    <string name="action_register">Daftar</string>
+    <string name="toggle_to_register">Belum punya akun? Daftar di sini</string>
+    <string name="toggle_to_login">Sudah punya akun? Masuk di sini</string>
+    <string name="error_fields_required">Username dan password wajib diisi</string>
+    <string name="error_password_too_short">Password minimal 8 karakter</string>
+
+    <!-- Notes list -->
+    <string name="hint_search_notes">Cari catatan…</string>
+    <string name="chip_all">Semua</string>
+    <string name="chip_add_folder">+ Folder</string>
+    <string name="empty_notes_title">Belum ada catatan</string>
+    <string name="empty_notes_subtitle">Ketuk tombol + untuk bikin catatan pertama kamu</string>
+    <string name="action_logout">Keluar</string>
+    <string name="action_new_folder">Folder baru</string>
+    <string name="hint_folder_name">Nama folder</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_save">Simpan</string>
+    <string name="action_create">Buat</string>
+    <string name="action_rename">Ubah</string>
+
+    <!-- Folder management -->
+    <string name="dialog_folder_options_title">Pilihan Folder</string>
+    <string name="action_rename_folder">Ubah Nama</string>
+    <string name="action_delete_folder">Hapus Folder</string>
+    <string name="confirm_delete_folder_title">Hapus folder?</string>
+    <string name="confirm_delete_folder_message">Catatan di dalam folder ini tidak akan terhapus, hanya menjadi tanpa folder.</string>
+
+    <!-- Archive -->
+    <string name="title_archived_notes">Catatan Terarsip</string>
+    <string name="empty_archived_title">Belum ada catatan terarsip</string>
+    <string name="empty_archived_subtitle">Catatan yang kamu arsipkan akan muncul di sini</string>
+
+    <!-- Note detail -->
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Hapus</string>
+    <string name="action_archive">Arsipkan</string>
+    <string name="action_unarchive">Batal arsip</string>
+    <string name="confirm_delete_title">Hapus catatan?</string>
+    <string name="confirm_delete_message">Catatan yang dihapus tidak bisa dikembalikan.</string>
+
+    <!-- Note edit -->
+    <string name="hint_note_title">Judul catatan</string>
+    <string name="hint_note_content">Tulis catatan di sini…</string>
+    <string name="label_color">Warna</string>
+    <string name="label_folder">Folder</string>
+    <string name="folder_none">Tanpa folder</string>
+    <string name="error_title_required">Judul catatan tidak boleh kosong</string>
 </resources>
