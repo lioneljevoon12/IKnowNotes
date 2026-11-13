@@ -54,4 +54,17 @@
     <string name="label_folder">Folder</string>
     <string name="folder_none">Tanpa folder</string>
     <string name="error_title_required">Judul catatan tidak boleh kosong</string>
+
+    <!-- Reminder -->
+    <string name="label_reminder">Pengingat</string>
+    <string name="reminder_none">Tidak ada pengingat</string>
+    <string name="reminder_clear">Hapus pengingat</string>
+    <string name="reminder_pick_date">Pilih tanggal</string>
+    <string name="reminder_pick_time">Pilih jam</string>
+    <string name="reminder_error_past">Waktu pengingat harus di masa depan</string>
+    <string name="reminder_permission_denied">Izin notifikasi ditolak, pengingat tidak akan muncul sebagai notifikasi</string>
+    <string name="reminder_channel_name">Pengingat catatan</string>
+    <string name="reminder_channel_description">Notifikasi saat waktu pengingat catatan tiba</string>
+    <string name="reminder_untitled">Pengingat catatan</string>
+    <string name="reminder_default_text">Waktunya cek catatanmu</string>
 </resources>

@@ -18,6 +18,7 @@ import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.AuthRepository
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNotesListBinding
+import com.example.iknownotes.reminder.ReminderScheduler
 import com.example.iknownotes.ui.auth.LoginActivity
 import com.example.iknownotes.ui.notedetail.NoteDetailActivity
 import com.example.iknownotes.ui.noteedit.NoteEditActivity
@@ -105,6 +106,7 @@ class NotesListActivity : AppCompatActivity() {
             )
         }
         binding.btnLogout.setOnClickListener {
+            ReminderScheduler.cancelAll(this)
             authRepository.logout()
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
@@ -273,10 +275,13 @@ class NotesListActivity : AppCompatActivity() {
         binding.swipeRefresh.isRefreshing = false
         adapter.submitList(notes)
         binding.layoutEmpty.visibility = if (notes.isEmpty()) View.VISIBLE else View.GONE
+        // Rebuilds alarms from server data (covers reboots and edits from other devices).
+        ReminderScheduler.syncAll(this, notes)
     }
 
     private fun maybeRedirectToLogin(error: Throwable) {
         if (error.message?.contains("Sesi kamu udah habis") == true) {
+            ReminderScheduler.cancelAll(this)
             authRepository.logout()
             startActivity(Intent(this, LoginActivity::class.java))
             finish()

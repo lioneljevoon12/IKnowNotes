@@ -2,6 +2,7 @@ package com.example.iknownotes.data.remote
 
 import android.content.Context
 import com.example.iknownotes.data.local.SessionManager
+import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -62,7 +63,11 @@ object RetrofitClient {
         val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
+            // serializeNulls: otherwise clearing a reminder/folder (null) is dropped from
+            // the PATCH body and the server keeps the old value.
+            .addConverterFactory(
+                GsonConverterFactory.create(GsonBuilder().serializeNulls().create())
+            )
             .build()
 
         return retrofit.create(ApiService::class.java)

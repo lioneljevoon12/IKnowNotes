@@ -90,6 +90,32 @@
                     tools:text="Kuliah"
                     tools:visibility="visible" />
 
+                <LinearLayout
+                    android:id="@+id/layout_reminder"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_alarm" />
+
+                    <TextView
+                        android:id="@+id/tv_reminder"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        tools:text="14 Nov 2026, 10:30" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/tv_title"
                     android:layout_width="match_parent"

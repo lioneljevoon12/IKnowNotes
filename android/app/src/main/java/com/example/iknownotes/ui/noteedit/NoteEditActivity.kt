@@ -1,13 +1,23 @@
 package com.example.iknownotes.ui.noteedit
 
+import android.Manifest
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.iknownotes.reminder.ReminderScheduler
+import com.example.iknownotes.util.ReminderHelper
+import java.util.Calendar
 import com.example.iknownotes.R
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.Note
@@ -36,6 +46,14 @@ class NoteEditActivity : AppCompatActivity() {
     private var selectedColorKey: String = "default"
     private val swatchViews = mutableMapOf<String, View>()
 
+    /** Reminder as epoch millis, or null when no reminder is set. */
+    private var reminderMillis: Long? = null
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) showSnackbar(getString(R.string.reminder_permission_denied))
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityNoteEditBinding.inflate(layoutInflater)
@@ -54,9 +72,78 @@ class NoteEditActivity : AppCompatActivity() {
 
         setupFormattingToolbar()
         buildColorSwatches()
+        setupReminder()
         loadFolders()
 
         if (isEditMode) loadExistingNote()
+    }
+
+    private fun setupReminder() {
+        binding.tvReminder.setOnClickListener { pickReminderDate() }
+        binding.btnClearReminder.setOnClickListener {
+            reminderMillis = null
+            renderReminder()
+        }
+        renderReminder()
+    }
+
+    private fun renderReminder() {
+        val millis = reminderMillis
+        if (millis == null) {
+            binding.tvReminder.text = getString(R.string.reminder_none)
+            binding.btnClearReminder.visibility = View.GONE
+        } else {
+            binding.tvReminder.text = ReminderHelper.formatDisplay(millis)
+            binding.btnClearReminder.visibility = View.VISIBLE
+        }
+    }
+
+    private fun pickReminderDate() {
+        val initial = Calendar.getInstance().apply {
+            reminderMillis?.let { timeInMillis = it }
+        }
+        DatePickerDialog(
+            this,
+            { _, year, month, day -> pickReminderTime(year, month, day, initial) },
+            initial.get(Calendar.YEAR),
+            initial.get(Calendar.MONTH),
+            initial.get(Calendar.DAY_OF_MONTH)
+        ).apply {
+            datePicker.minDate = System.currentTimeMillis() - 1000
+            setTitle(R.string.reminder_pick_date)
+        }.show()
+    }
+
+    private fun pickReminderTime(year: Int, month: Int, day: Int, initial: Calendar) {
+        TimePickerDialog(
+            this,
+            { _, hour, minute ->
+                val chosen = Calendar.getInstance().apply {
+                    set(year, month, day, hour, minute, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                if (!ReminderHelper.isInFuture(chosen)) {
+                    showSnackbar(getString(R.string.reminder_error_past))
+                } else {
+                    reminderMillis = chosen
+                    renderReminder()
+                    requestNotificationPermissionIfNeeded()
+                }
+            },
+            initial.get(Calendar.HOUR_OF_DAY),
+            initial.get(Calendar.MINUTE),
+            true
+        ).apply { setTitle(R.string.reminder_pick_time) }.show()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     private fun setupFormattingToolbar() {
@@ -169,6 +256,8 @@ class NoteEditActivity : AppCompatActivity() {
                     binding.etTitle.setText(note.title)
                     binding.etContent.setText(RichTextHelper.fromHtml(note.content))
                     selectColor(note.color ?: "default")
+                    reminderMillis = ReminderHelper.parseIso(note.reminderTime)
+                    renderReminder()
                     setupFolderSpinner()
                 }
                 .onFailure {
@@ -195,7 +284,7 @@ class NoteEditActivity : AppCompatActivity() {
             content = content,
             color = selectedColorKey,
             isPinned = existingNote?.isPinned ?: false,
-            reminderTime = existingNote?.reminderTime
+            reminderTime = reminderMillis?.let { ReminderHelper.toIso(it) }
         )
 
         setLoading(true)
@@ -207,7 +296,10 @@ class NoteEditActivity : AppCompatActivity() {
             }
             setLoading(false)
             result
-                .onSuccess { finish() }
+                .onSuccess { saved ->
+                    ReminderScheduler.sync(this@NoteEditActivity, saved)
+                    finish()
+                }
                 .onFailure { showSnackbar(it.message ?: "Gagal menyimpan catatan") }
         }
     }

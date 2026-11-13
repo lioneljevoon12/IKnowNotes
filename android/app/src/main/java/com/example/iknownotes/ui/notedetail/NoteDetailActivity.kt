@@ -13,7 +13,9 @@ import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteDetailBinding
 import com.example.iknownotes.ui.noteedit.NoteEditActivity
+import com.example.iknownotes.reminder.ReminderScheduler
 import com.example.iknownotes.util.NoteColorPalette
+import com.example.iknownotes.util.ReminderHelper
 import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
@@ -90,6 +92,15 @@ class NoteDetailActivity : AppCompatActivity() {
         binding.headerBar.setBackgroundColor(
             getColor(NoteColorPalette.colorResFor(note.color))
         )
+        val reminderMillis = ReminderHelper.parseIso(note.reminderTime)
+        if (reminderMillis != null) {
+            binding.tvReminder.text = ReminderHelper.formatDisplay(reminderMillis)
+            binding.layoutReminder.visibility = View.VISIBLE
+        } else {
+            binding.layoutReminder.visibility = View.GONE
+        }
+        // Keeps the alarm in step with pin/archive/edit changes made from here.
+        ReminderScheduler.sync(this, note)
         binding.btnPin.setImageResource(
             if (note.isPinned) R.drawable.ic_pin_filled else R.drawable.ic_pin_outline
         )
@@ -117,7 +128,10 @@ class NoteDetailActivity : AppCompatActivity() {
     private fun deleteNote() {
         lifecycleScope.launch {
             notesRepository.deleteNote(noteId)
-                .onSuccess { finish() }
+                .onSuccess {
+                    ReminderScheduler.cancel(this@NoteDetailActivity, noteId)
+                    finish()
+                }
                 .onFailure { showSnackbar(it.message ?: "Gagal menghapus catatan") }
         }
     }

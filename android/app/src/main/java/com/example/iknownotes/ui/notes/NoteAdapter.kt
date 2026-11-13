@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.databinding.ItemNoteBinding
 import com.example.iknownotes.util.NoteColorPalette
+import com.example.iknownotes.util.ReminderHelper
 import com.example.iknownotes.util.RichTextHelper
 
 class NoteAdapter(
@@ -38,6 +39,14 @@ class NoteAdapter(
                 binding.tvFolder.visibility = android.view.View.VISIBLE
             } else {
                 binding.tvFolder.visibility = android.view.View.GONE
+            }
+
+            val reminderMillis = ReminderHelper.parseIso(note.reminderTime)
+            if (reminderMillis != null) {
+                binding.tvReminder.text = ReminderHelper.formatDisplay(reminderMillis)
+                binding.layoutReminder.visibility = android.view.View.VISIBLE
+            } else {
+                binding.layoutReminder.visibility = android.view.View.GONE
             }
 
             val colorRes = NoteColorPalette.colorResFor(note.color)

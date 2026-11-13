@@ -119,6 +119,50 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp" />
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/label_reminder"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_alarm" />
+
+                    <TextView
+                        android:id="@+id/tv_reminder"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="?attr/selectableItemBackground"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="10dp"
+                        android:text="@string/reminder_none"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <ImageButton
+                        android:id="@+id/btn_clear_reminder"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/reminder_clear"
+                        android:src="@drawable/ic_close"
+                        android:visibility="gone" />
+                </LinearLayout>
+
             </LinearLayout>
         </ScrollView>
 
