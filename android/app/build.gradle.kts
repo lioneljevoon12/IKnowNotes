@@ -25,7 +25,22 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Testing shortcut: build with -PdevLogin=true and the login screen is skipped; the app
+            // signs in (or registers) a throwaway test account by itself. Off unless you ask for it.
+            // Override the account with -PdevUser=... -PdevPass=... (password needs 8+ characters).
+            val devLogin = (project.findProperty("devLogin") as String?) == "true"
+            val devUser = (project.findProperty("devUser") as String?) ?: "tester_dev"
+            val devPass = (project.findProperty("devPass") as String?) ?: "tester-dev-123"
+            buildConfigField("boolean", "DEV_AUTO_LOGIN", devLogin.toString())
+            buildConfigField("String", "DEV_USERNAME", "\"$devUser\"")
+            buildConfigField("String", "DEV_PASSWORD", "\"$devPass\"")
+        }
         release {
+            // Release builds can never contain the shortcut or its credentials.
+            buildConfigField("boolean", "DEV_AUTO_LOGIN", "false")
+            buildConfigField("String", "DEV_USERNAME", "\"\"")
+            buildConfigField("String", "DEV_PASSWORD", "\"\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
