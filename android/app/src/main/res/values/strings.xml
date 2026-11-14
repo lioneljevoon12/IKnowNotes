@@ -76,6 +76,21 @@
     <string name="folder_none">Tanpa folder</string>
     <string name="error_title_required">Judul catatan tidak boleh kosong</string>
 
+    <!-- Offline mode -->
+    <string name="banner_offline">Mode offline · menampilkan data tersimpan di perangkat</string>
+    <string name="banner_offline_pending">Mode offline · %1$d perubahan menunggu sinkronisasi</string>
+    <string name="banner_syncing">Menyinkronkan %1$d perubahan…</string>
+    <string name="confirm_logout_title">Keluar dari akun?</string>
+    <string name="confirm_logout_message">Ada %1$d perubahan yang belum tersinkron ke server. Kalau keluar sekarang, perubahan itu akan hilang.</string>
+
+    <!-- Draft / unsaved changes -->
+    <string name="unsaved_title">Simpan perubahan?</string>
+    <string name="unsaved_message">Catatan ini punya perubahan yang belum disimpan.</string>
+    <string name="action_discard">Buang</string>
+    <string name="draft_restore_title">Draf ditemukan</string>
+    <string name="draft_restore_message">Ada tulisan yang belum sempat disimpan. Pulihkan draf itu?</string>
+    <string name="action_restore_draft">Pulihkan</string>
+
     <!-- Reminder -->
     <string name="label_reminder">Pengingat</string>
     <string name="reminder_none">Tidak ada pengingat</string>

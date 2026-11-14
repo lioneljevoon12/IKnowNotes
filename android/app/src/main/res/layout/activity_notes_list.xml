@@ -63,6 +63,21 @@
                 app:tint="@color/blue_on_primary" />
         </LinearLayout>
 
+        <!-- Offline / sync status -->
+        <TextView
+            android:id="@+id/tv_sync_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/note_yellow"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="Mode offline"
+            tools:visibility="visible" />
+
         <!-- Search -->
         <FrameLayout
             android:layout_width="match_parent"

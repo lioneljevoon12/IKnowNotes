@@ -8,7 +8,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.Note
-import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityArchivedNotesBinding
 import com.example.iknownotes.ui.notedetail.NoteDetailActivity
@@ -28,8 +27,7 @@ class ArchivedNotesActivity : AppCompatActivity() {
         binding = ActivityArchivedNotesBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val api = RetrofitClient.getApi(this)
-        notesRepository = NotesRepository(api)
+        notesRepository = NotesRepository.get(this)
 
         binding.btnBack.setOnClickListener { finish() }
 

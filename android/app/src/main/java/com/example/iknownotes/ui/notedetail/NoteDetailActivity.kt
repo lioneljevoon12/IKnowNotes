@@ -10,7 +10,6 @@ import androidx.lifecycle.lifecycleScope
 import com.example.iknownotes.R
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
-import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteDetailBinding
 import com.example.iknownotes.ui.noteedit.NoteEditActivity
@@ -34,7 +33,7 @@ class NoteDetailActivity : AppCompatActivity() {
         binding = ActivityNoteDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        notesRepository = NotesRepository(RetrofitClient.getApi(this))
+        notesRepository = NotesRepository.get(this)
         noteId = intent.getIntExtra(EXTRA_NOTE_ID, -1)
 
         if (noteId == -1) {

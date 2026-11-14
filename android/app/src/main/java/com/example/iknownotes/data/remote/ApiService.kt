@@ -9,7 +9,6 @@ import com.example.iknownotes.data.model.RefreshRequest
 import com.example.iknownotes.data.model.RefreshResponse
 import com.example.iknownotes.data.model.RegisterRequest
 import com.example.iknownotes.data.model.TokenResponse
-import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -42,7 +41,7 @@ interface ApiService {
     suspend fun updateFolder(@Path("id") id: Int, @Body body: FolderRequest): Folder
 
     @DELETE("api/folders/{id}/")
-    suspend fun deleteFolder(@Path("id") id: Int): Response<Unit>
+    suspend fun deleteFolder(@Path("id") id: Int)
 
     @GET("api/notes/")
     suspend fun getNotes(
@@ -80,8 +79,8 @@ interface ApiService {
     suspend fun emptyTrash()
 
     @PATCH("api/notes/{id}/archive/")
-    suspend fun archiveNote(@Path("id") id: Int): Response<Unit>
+    suspend fun archiveNote(@Path("id") id: Int)
 
     @PATCH("api/notes/{id}/unarchive/")
-    suspend fun unarchiveNote(@Path("id") id: Int): Response<Unit>
+    suspend fun unarchiveNote(@Path("id") id: Int)
 }

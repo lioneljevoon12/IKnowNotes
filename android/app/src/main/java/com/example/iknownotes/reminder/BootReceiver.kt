@@ -24,7 +24,7 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                NotesRepository(RetrofitClient.getApi(appContext)).getNotes()
+                NotesRepository.get(appContext).getNotes()
                     .onSuccess { notes -> ReminderScheduler.syncAll(appContext, notes) }
             } finally {
                 pending.finish()

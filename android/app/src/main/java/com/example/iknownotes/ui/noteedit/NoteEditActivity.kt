@@ -1,6 +1,7 @@
 package com.example.iknownotes.ui.noteedit
 
 import android.Manifest
+import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.pm.PackageManager
@@ -8,9 +9,13 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -19,15 +24,18 @@ import com.example.iknownotes.reminder.ReminderScheduler
 import com.example.iknownotes.util.ReminderHelper
 import java.util.Calendar
 import com.example.iknownotes.R
+import com.example.iknownotes.data.local.DraftStore
+import com.example.iknownotes.data.local.NoteDraft
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
-import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteEditBinding
 import com.example.iknownotes.util.NoteColorPalette
 import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class NoteEditActivity : AppCompatActivity() {
@@ -49,6 +57,29 @@ class NoteEditActivity : AppCompatActivity() {
     /** Reminder as epoch millis, or null when no reminder is set. */
     private var reminderMillis: Long? = null
 
+    private val draftStore by lazy { DraftStore(this) }
+    private val draftKey: String get() = DraftStore.keyFor(noteId)
+
+    /** What the editor looked like once everything finished loading; null until then. */
+    private var initialState: EditorState? = null
+    private var foldersLoaded = false
+    private var noteLoaded = false
+
+    /** True while the "restore draft?" dialog is open, so autosave can't clobber the draft. */
+    private var draftDecisionPending = false
+
+    /** Set once the note was saved or the user chose to discard, so onStop keeps no draft. */
+    private var exiting = false
+    private var draftJob: Job? = null
+
+    private data class EditorState(
+        val title: String,
+        val contentHtml: String,
+        val color: String,
+        val folderId: Int?,
+        val reminderMillis: Long?
+    )
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (!granted) showSnackbar(getString(R.string.reminder_permission_denied))
@@ -59,7 +90,7 @@ class NoteEditActivity : AppCompatActivity() {
         binding = ActivityNoteEditBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        notesRepository = NotesRepository(RetrofitClient.getApi(this))
+        notesRepository = NotesRepository.get(this)
 
         noteId = intent.getIntExtra(EXTRA_NOTE_ID, -1)
         isEditMode = noteId != -1
@@ -67,9 +98,13 @@ class NoteEditActivity : AppCompatActivity() {
             if (isEditMode) R.string.action_edit else R.string.action_create
         )
 
-        binding.btnClose.setOnClickListener { finish() }
+        binding.btnClose.setOnClickListener { requestExit() }
         binding.btnSave.setOnClickListener { save() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = requestExit()
+        })
 
+        setupDraftAutosave()
         setupFormattingToolbar()
         buildColorSwatches()
         setupReminder()
@@ -83,6 +118,7 @@ class NoteEditActivity : AppCompatActivity() {
         binding.btnClearReminder.setOnClickListener {
             reminderMillis = null
             renderReminder()
+            onEditorChanged()
         }
         renderReminder()
     }
@@ -128,6 +164,7 @@ class NoteEditActivity : AppCompatActivity() {
                 } else {
                     reminderMillis = chosen
                     renderReminder()
+                    onEditorChanged()
                     requestNotificationPermissionIfNeeded()
                 }
             },
@@ -149,21 +186,27 @@ class NoteEditActivity : AppCompatActivity() {
     private fun setupFormattingToolbar() {
         binding.btnBold.setOnClickListener {
             RichTextHelper.applyBold(binding.etContent)
+            onEditorChanged()
         }
         binding.btnItalic.setOnClickListener {
             RichTextHelper.applyItalic(binding.etContent)
+            onEditorChanged()
         }
         binding.btnUnderline.setOnClickListener {
             RichTextHelper.applyUnderline(binding.etContent)
+            onEditorChanged()
         }
         binding.btnStrikethrough.setOnClickListener {
             RichTextHelper.applyStrikethrough(binding.etContent)
+            onEditorChanged()
         }
         binding.btnBulletList.setOnClickListener {
             RichTextHelper.applyBulletList(binding.etContent)
+            onEditorChanged()
         }
         binding.btnNumberedList.setOnClickListener {
             RichTextHelper.applyNumberedList(binding.etContent)
+            onEditorChanged()
         }
     }
 
@@ -211,6 +254,7 @@ class NoteEditActivity : AppCompatActivity() {
         swatchViews.forEach { (swatchKey, ringView) ->
             ringView.visibility = if (swatchKey == key) View.VISIBLE else View.GONE
         }
+        onEditorChanged()
     }
 
     private fun loadFolders() {
@@ -218,10 +262,12 @@ class NoteEditActivity : AppCompatActivity() {
             notesRepository.getFolders()
                 .onSuccess { list ->
                     folders = list
+                    foldersLoaded = true
                     setupFolderSpinner()
                 }
                 .onFailure {
                     folders = emptyList()
+                    foldersLoaded = true
                     setupFolderSpinner()
                 }
         }
@@ -244,6 +290,7 @@ class NoteEditActivity : AppCompatActivity() {
             .takeIf { it != -1 }
         val position = ids.indexOf(preselectFolderId).takeIf { it >= 0 } ?: 0
         binding.spinnerFolder.setSelection(position)
+        maybeCaptureInitialState()
     }
 
     private fun loadExistingNote() {
@@ -258,6 +305,7 @@ class NoteEditActivity : AppCompatActivity() {
                     selectColor(note.color ?: "default")
                     reminderMillis = ReminderHelper.parseIso(note.reminderTime)
                     renderReminder()
+                    noteLoaded = true
                     setupFolderSpinner()
                 }
                 .onFailure {
@@ -298,10 +346,143 @@ class NoteEditActivity : AppCompatActivity() {
             result
                 .onSuccess { saved ->
                     ReminderScheduler.sync(this@NoteEditActivity, saved)
+                    exiting = true
+                    draftJob?.cancel()
+                    draftStore.clear(draftKey)
                     finish()
                 }
                 .onFailure { showSnackbar(it.message ?: "Gagal menyimpan catatan") }
         }
+    }
+
+    // ------------------------------------------------- drafts & unsaved changes
+
+    private fun setupDraftAutosave() {
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) = onEditorChanged()
+        }
+        binding.etTitle.addTextChangedListener(watcher)
+        binding.etContent.addTextChangedListener(watcher)
+        binding.spinnerFolder.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) =
+                onEditorChanged()
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
+    private fun currentState() = EditorState(
+        title = binding.etTitle.text?.toString()?.trim().orEmpty(),
+        contentHtml = RichTextHelper.toHtml(binding.etContent.text),
+        color = selectedColorKey,
+        folderId = folderIdByPosition.getOrNull(binding.spinnerFolder.selectedItemPosition),
+        reminderMillis = reminderMillis
+    )
+
+    private fun isDirty(): Boolean {
+        val initial = initialState ?: return false
+        return currentState() != initial
+    }
+
+    /** Remembers the freshly loaded editor so later edits can be detected. */
+    private fun maybeCaptureInitialState() {
+        if (initialState != null || !foldersLoaded || (isEditMode && !noteLoaded)) return
+        initialState = currentState()
+        offerDraftRestore()
+    }
+
+    private fun offerDraftRestore() {
+        val draft = draftStore.load(draftKey) ?: return
+        val initial = initialState ?: return
+        if (draft.toEditorState() == initial) {
+            draftStore.clear(draftKey)
+            return
+        }
+        draftDecisionPending = true
+        AlertDialog.Builder(this)
+            .setTitle(R.string.draft_restore_title)
+            .setMessage(R.string.draft_restore_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.action_restore_draft) { _, _ ->
+                applyDraft(draft)
+                draftDecisionPending = false
+            }
+            .setNegativeButton(R.string.action_discard) { _, _ ->
+                draftStore.clear(draftKey)
+                draftDecisionPending = false
+            }
+            .show()
+    }
+
+    private fun applyDraft(draft: NoteDraft) {
+        binding.etTitle.setText(draft.title)
+        binding.etContent.setText(RichTextHelper.fromHtml(draft.contentHtml))
+        selectColor(draft.color)
+        reminderMillis = draft.reminderMillis
+        renderReminder()
+        val position = folderIdByPosition.indexOf(draft.folderId).takeIf { it >= 0 } ?: 0
+        binding.spinnerFolder.setSelection(position)
+    }
+
+    private fun NoteDraft.toEditorState() = EditorState(
+        title = title,
+        contentHtml = contentHtml,
+        color = color,
+        folderId = folderId,
+        reminderMillis = reminderMillis
+    )
+
+    /** Called after any edit: schedules a debounced draft save. */
+    private fun onEditorChanged() {
+        if (initialState == null || draftDecisionPending || exiting) return
+        draftJob?.cancel()
+        draftJob = lifecycleScope.launch {
+            delay(AUTOSAVE_DELAY_MS)
+            persistDraft()
+        }
+    }
+
+    private fun persistDraft() {
+        if (initialState == null || draftDecisionPending || exiting) return
+        if (!isDirty()) {
+            draftStore.clear(draftKey)
+            return
+        }
+        val state = currentState()
+        draftStore.save(
+            draftKey,
+            NoteDraft(state.title, state.contentHtml, state.color, state.folderId, state.reminderMillis)
+        )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Covers the app being backgrounded and then killed before the debounce fires.
+        draftJob?.cancel()
+        persistDraft()
+    }
+
+    private fun requestExit() {
+        if (!isDirty()) {
+            draftStore.clear(draftKey)
+            exiting = true
+            finish()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.unsaved_title)
+            .setMessage(R.string.unsaved_message)
+            .setPositiveButton(R.string.action_save) { _, _ -> save() }
+            .setNegativeButton(R.string.action_discard) { _, _ ->
+                draftJob?.cancel()
+                draftStore.clear(draftKey)
+                exiting = true
+                finish()
+            }
+            .setNeutralButton(R.string.action_cancel, null)
+            .show()
     }
 
     private fun setLoading(loading: Boolean) {
@@ -316,5 +497,6 @@ class NoteEditActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_NOTE_ID = "extra_note_id"
         const val EXTRA_FOLDER_ID = "extra_folder_id"
+        private const val AUTOSAVE_DELAY_MS = 1500L
     }
 }

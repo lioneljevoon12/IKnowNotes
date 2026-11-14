@@ -16,7 +16,9 @@ import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.AuthRepository
+import com.example.iknownotes.data.local.DraftStore
 import com.example.iknownotes.data.repo.NotesRepository
+import com.example.iknownotes.data.repo.SyncStatus
 import com.example.iknownotes.databinding.ActivityNotesListBinding
 import com.example.iknownotes.reminder.ReminderScheduler
 import com.example.iknownotes.ui.auth.LoginActivity
@@ -40,6 +42,7 @@ class NotesListActivity : AppCompatActivity() {
     private var selectedFolderId: Int? = null
     private var searchQuery: String = ""
     private var searchDebounceJob: Job? = null
+    private var statusJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,7 +51,7 @@ class NotesListActivity : AppCompatActivity() {
 
         val api = RetrofitClient.getApi(this)
         val session = RetrofitClient.getSessionManager(this)
-        notesRepository = NotesRepository(api)
+        notesRepository = NotesRepository.get(this)
         authRepository = AuthRepository(api, session)
 
         binding.tvGreeting.text = "Halo, ${session.username ?: "kamu"}"
@@ -58,6 +61,43 @@ class NotesListActivity : AppCompatActivity() {
         setupHeaderAndFab()
 
         loadFolders()
+    }
+
+    /** Shows the offline / "waiting to sync" banner and refreshes once everything synced. */
+    private fun observeSyncStatus() {
+        statusJob?.cancel()
+        statusJob = lifecycleScope.launch {
+            var previousPending = notesRepository.status.value.pendingChanges
+            notesRepository.status.collect { status ->
+                renderSyncBanner(status)
+                // Temporary ids were swapped for real ones: reload the list.
+                if (previousPending > 0 && status.pendingChanges == 0) loadNotes()
+                previousPending = status.pendingChanges
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        observeSyncStatus()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        statusJob?.cancel()
+    }
+
+    private fun renderSyncBanner(status: SyncStatus) {
+        val text = when {
+            status.offline && status.pendingChanges > 0 ->
+                getString(R.string.banner_offline_pending, status.pendingChanges)
+            status.offline -> getString(R.string.banner_offline)
+            status.pendingChanges > 0 ->
+                getString(R.string.banner_syncing, status.pendingChanges)
+            else -> null
+        }
+        binding.tvSyncBanner.text = text
+        binding.tvSyncBanner.visibility = if (text == null) View.GONE else View.VISIBLE
     }
 
     override fun onResume() {
@@ -109,12 +149,31 @@ class NotesListActivity : AppCompatActivity() {
                     .putExtra(NoteEditActivity.EXTRA_FOLDER_ID, selectedFolderId)
             )
         }
-        binding.btnLogout.setOnClickListener {
-            ReminderScheduler.cancelAll(this)
-            authRepository.logout()
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
+        binding.btnLogout.setOnClickListener { confirmLogout() }
+    }
+
+    private fun confirmLogout() {
+        val pending = notesRepository.status.value.pendingChanges
+        if (pending == 0) {
+            logout()
+            return
         }
+        // Logging out wipes the offline cache, including changes that never reached the server.
+        AlertDialog.Builder(this)
+            .setTitle(R.string.confirm_logout_title)
+            .setMessage(getString(R.string.confirm_logout_message, pending))
+            .setPositiveButton(R.string.action_logout) { _, _ -> logout() }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun logout() {
+        ReminderScheduler.cancelAll(this)
+        notesRepository.clearLocalData()
+        DraftStore(this).clearAll()
+        authRepository.logout()
+        startActivity(Intent(this, LoginActivity::class.java))
+        finish()
     }
 
     private fun loadFolders() {

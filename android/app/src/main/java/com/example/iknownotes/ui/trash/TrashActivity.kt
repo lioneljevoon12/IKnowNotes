@@ -9,7 +9,6 @@ import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.example.iknownotes.R
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.Note
-import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityTrashBinding
 import com.example.iknownotes.ui.notes.NoteAdapter
@@ -32,7 +31,7 @@ class TrashActivity : AppCompatActivity() {
         binding = ActivityTrashBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        notesRepository = NotesRepository(RetrofitClient.getApi(this))
+        notesRepository = NotesRepository.get(this)
 
         binding.btnBack.setOnClickListener { finish() }
         binding.btnEmptyTrash.setOnClickListener { confirmEmptyTrash() }
