@@ -209,6 +209,11 @@ class NotesRepository internal constructor(
             )
         }
 
+    suspend fun setPinned(id: Int, pinned: Boolean): Result<Unit> =
+        mutateNote(id) { cached, nowIso ->
+            cached.copy(note = cached.note.copy(isPinned = pinned, updatedAt = nowIso), dirtyFields = true)
+        }.map { }
+
     /** Soft delete: the note goes to the trash and can be restored. */
     suspend fun deleteNote(id: Int): Result<Unit> =
         mutateNote(id) { cached, nowIso ->

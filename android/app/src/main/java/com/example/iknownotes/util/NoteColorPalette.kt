@@ -11,14 +11,14 @@ import com.example.iknownotes.R
  */
 object NoteColorPalette {
 
-    data class Swatch(val key: String, val colorRes: Int)
+    data class Swatch(val key: String, val colorRes: Int, val labelRes: Int)
 
     val swatches = listOf(
-        Swatch("default", R.color.surface),
-        Swatch("yellow", R.color.note_yellow),
-        Swatch("green", R.color.note_green),
-        Swatch("pink", R.color.note_pink),
-        Swatch("blue", R.color.note_blue)
+        Swatch("default", R.color.surface, R.string.color_default),
+        Swatch("yellow", R.color.note_yellow, R.string.color_yellow),
+        Swatch("green", R.color.note_green, R.string.color_green),
+        Swatch("pink", R.color.note_pink, R.string.color_pink),
+        Swatch("blue", R.color.note_blue, R.string.color_blue)
     )
 
     fun colorResFor(key: String?): Int {

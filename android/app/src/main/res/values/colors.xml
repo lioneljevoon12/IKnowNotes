@@ -22,6 +22,10 @@
     <color name="note_pink">#FCE7F3</color>
     <color name="note_blue">#DBEAFE</color>
 
+    <!-- Swipe actions in the notes list -->
+    <color name="swipe_archive">#2563EB</color>
+    <color name="swipe_trash">#DC2626</color>
+
     <!-- Dark Mode Colors -->
     <color name="background_dark">#0B1220</color>
     <color name="surface_dark">#111827</color>

@@ -76,6 +76,48 @@
     <string name="folder_none">Tanpa folder</string>
     <string name="error_title_required">Judul catatan tidak boleh kosong</string>
 
+    <!-- Sort, filter and view mode -->
+    <string name="filter_button">Urutkan &amp; filter</string>
+    <string name="filter_title">Urutkan &amp; filter</string>
+    <string name="sort_label">Urutkan</string>
+    <string name="sort_updated_desc">Terbaru diubah</string>
+    <string name="sort_updated_asc">Terlama diubah</string>
+    <string name="sort_title_asc">Judul A–Z</string>
+    <string name="sort_title_desc">Judul Z–A</string>
+    <string name="filter_color">Warna</string>
+    <string name="color_default">Polos</string>
+    <string name="color_yellow">Kuning</string>
+    <string name="color_green">Hijau</string>
+    <string name="color_pink">Merah muda</string>
+    <string name="color_blue">Biru</string>
+    <string name="filter_date">Terakhir diubah</string>
+    <string name="date_any">Kapan saja</string>
+    <string name="date_today">Hari ini</string>
+    <string name="date_7_days">7 hari terakhir</string>
+    <string name="date_30_days">30 hari terakhir</string>
+    <string name="filter_reminder">Pengingat</string>
+    <string name="filter_only_reminder">Punya pengingat</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_apply">Terapkan</string>
+    <string name="active_filters">%1$d filter aktif · Reset</string>
+    <string name="view_list">Tampilan daftar</string>
+    <string name="view_grid">Tampilan kotak</string>
+    <string name="empty_filtered_title">Tidak ada catatan yang cocok</string>
+    <string name="empty_filtered_subtitle">Coba ubah kata kunci atau filternya</string>
+
+    <!-- Quick actions -->
+    <string name="selection_count">%1$d dipilih</string>
+    <string name="action_pin">Sematkan</string>
+    <string name="action_unpin">Lepas sematan</string>
+    <string name="action_undo">Urungkan</string>
+    <string name="note_archived">Catatan diarsipkan</string>
+    <string name="notes_archived">%1$d catatan diarsipkan</string>
+    <string name="notes_trashed">%1$d catatan dipindahkan ke sampah</string>
+    <string name="notes_pinned">%1$d catatan disematkan</string>
+    <string name="notes_unpinned">Sematan dilepas dari %1$d catatan</string>
+    <string name="confirm_trash_selected_title">Pindahkan ke sampah?</string>
+    <string name="confirm_trash_selected_message">%1$d catatan akan dipindahkan ke sampah dan bisa dipulihkan.</string>
+
     <!-- Offline mode -->
     <string name="banner_offline">Mode offline · menampilkan data tersimpan di perangkat</string>
     <string name="banner_offline_pending">Mode offline · %1$d perubahan menunggu sinkronisasi</string>

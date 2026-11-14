@@ -13,6 +13,7 @@
 
         <!-- Header -->
         <LinearLayout
+            android:id="@+id/header_bar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@color/blue_primary"
@@ -63,6 +64,69 @@
                 app:tint="@color/blue_on_primary" />
         </LinearLayout>
 
+        <!-- Selection mode bar (replaces the header while notes are selected) -->
+        <LinearLayout
+            android:id="@+id/selection_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/blue_primary"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingTop="20dp"
+            android:paddingBottom="16dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/btn_selection_close"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_cancel"
+                android:src="@drawable/ic_close"
+                app:tint="@color/blue_on_primary" />
+
+            <TextView
+                android:id="@+id/tv_selection_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:textColor="@color/blue_on_primary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                tools:text="2 dipilih" />
+
+            <ImageButton
+                android:id="@+id/btn_select_pin"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_pin"
+                android:src="@drawable/ic_pin_outline"
+                app:tint="@color/blue_on_primary" />
+
+            <ImageButton
+                android:id="@+id/btn_select_archive"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_archive"
+                android:src="@drawable/ic_archive"
+                app:tint="@color/blue_on_primary" />
+
+            <ImageButton
+                android:id="@+id/btn_select_trash"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_move_to_trash"
+                android:src="@drawable/ic_delete"
+                app:tint="@color/blue_on_primary" />
+        </LinearLayout>
+
         <!-- Offline / sync status -->
         <TextView
             android:id="@+id/tv_sync_banner"
@@ -78,12 +142,19 @@
             tools:text="Mode offline"
             tools:visibility="visible" />
 
-        <!-- Search -->
-        <FrameLayout
+        <!-- Search + sort/filter + list/grid toggle -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_search_field"
-            android:layout_margin="16dp">
+            android:layout_margin="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_field">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -114,6 +185,42 @@
                     android:textSize="14sp" />
             </LinearLayout>
         </FrameLayout>
+
+            <ImageButton
+                android:id="@+id/btn_filter"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/filter_button"
+                android:src="@drawable/ic_filter"
+                app:tint="@color/text_secondary" />
+
+            <ImageButton
+                android:id="@+id/btn_view_mode"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/view_list"
+                android:src="@drawable/ic_view_list"
+                app:tint="@color/text_secondary" />
+        </LinearLayout>
+
+        <!-- Shown while a colour/reminder/date filter is active -->
+        <TextView
+            android:id="@+id/tv_active_filters"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="?attr/selectableItemBackground"
+            android:paddingVertical="4dp"
+            android:textColor="@color/blue_primary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:text="2 filter aktif · Reset"
+            tools:visibility="visible" />
 
         <!-- Folder filter chips -->
         <HorizontalScrollView
@@ -164,6 +271,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:id="@+id/tv_empty_title"
                     android:text="@string/empty_notes_title"
                     android:textColor="@color/text_primary"
                     android:textSize="16sp"
@@ -174,6 +282,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:gravity="center"
+                    android:id="@+id/tv_empty_subtitle"
                     android:text="@string/empty_notes_subtitle"
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
