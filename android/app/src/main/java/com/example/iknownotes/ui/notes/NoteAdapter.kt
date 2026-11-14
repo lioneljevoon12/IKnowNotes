@@ -58,6 +58,14 @@ class NoteAdapter(
                 binding.layoutReminder.visibility = android.view.View.GONE
             }
 
+            val attachmentCount = note.attachments.orEmpty().size
+            if (attachmentCount > 0) {
+                binding.tvAttachmentCount.text = attachmentCount.toString()
+                binding.layoutAttachments.visibility = android.view.View.VISIBLE
+            } else {
+                binding.layoutAttachments.visibility = android.view.View.GONE
+            }
+
             val colorRes = NoteColorPalette.colorResFor(note.color)
             binding.root.setCardBackgroundColor(
                 binding.root.context.getColor(colorRes)

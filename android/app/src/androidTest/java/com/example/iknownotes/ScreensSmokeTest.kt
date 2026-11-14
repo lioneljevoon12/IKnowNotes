@@ -52,7 +52,7 @@ class ScreensSmokeTest {
         RetrofitClient.getSessionManager(context).saveSession(access, refresh, "tester")
 
         // Start from a clean server-side state for this user.
-        val existing = JSONArray(request("GET", "/api/notes/", null, access))
+        val existing = JSONObject(request("GET", "/api/notes/?page_size=100", null, access)).getJSONArray("results")
         for (i in 0 until existing.length()) {
             val id = existing.getJSONObject(i).getInt("id")
             request("DELETE", "/api/notes/$id/", null, access)

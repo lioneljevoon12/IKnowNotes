@@ -76,6 +76,15 @@
     <string name="folder_none">Tanpa folder</string>
     <string name="error_title_required">Judul catatan tidak boleh kosong</string>
 
+    <!-- Attachments -->
+    <string name="label_attachments">Lampiran</string>
+    <string name="attachment_camera">Kamera</string>
+    <string name="attachment_gallery">Galeri</string>
+    <string name="attachment_remove">Hapus lampiran</string>
+    <string name="attachment_limit">Maksimal %1$d lampiran per catatan</string>
+    <string name="attachment_failed">Sebagian gambar gagal diproses</string>
+    <string name="camera_unavailable">Aplikasi kamera tidak ditemukan</string>
+
     <!-- Checklist, share and export -->
     <string name="action_checklist">Checklist</string>
     <string name="share_title">Bagikan &amp; ekspor</string>

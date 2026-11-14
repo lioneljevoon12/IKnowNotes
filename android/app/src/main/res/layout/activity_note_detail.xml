@@ -143,6 +143,14 @@
                     android:textSize="15sp"
                     android:textIsSelectable="true"
                     tools:text="Product management is a strategic role within a company that involves overseeing the development and management of a product." />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_attachments"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
             </LinearLayout>
         </ScrollView>
 

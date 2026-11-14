@@ -9,9 +9,16 @@ import com.example.iknownotes.data.model.RefreshRequest
 import com.example.iknownotes.data.model.RefreshResponse
 import com.example.iknownotes.data.model.RegisterRequest
 import com.example.iknownotes.data.model.TokenResponse
+import com.example.iknownotes.data.model.Attachment
+import com.example.iknownotes.data.model.PagedResponse
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.Part
+import retrofit2.http.Streaming
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -43,14 +50,22 @@ interface ApiService {
     @DELETE("api/folders/{id}/")
     suspend fun deleteFolder(@Path("id") id: Int)
 
+    // Lists are paginated; ordering=id keeps pages stable while notes are being edited.
     @GET("api/notes/")
     suspend fun getNotes(
         @Query("folder") folderId: Int? = null,
-        @Query("search") search: String? = null
-    ): List<Note>
+        @Query("search") search: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("page_size") pageSize: Int = 100,
+        @Query("ordering") ordering: String? = "id"
+    ): PagedResponse<Note>
 
     @GET("api/notes/archived/")
-    suspend fun getArchivedNotes(): List<Note>
+    suspend fun getArchivedNotes(
+        @Query("page") page: Int = 1,
+        @Query("page_size") pageSize: Int = 100,
+        @Query("ordering") ordering: String? = "id"
+    ): PagedResponse<Note>
 
     @GET("api/notes/{id}/")
     suspend fun getNote(@Path("id") id: Int): Note
@@ -66,7 +81,11 @@ interface ApiService {
     suspend fun deleteNote(@Path("id") id: Int)
 
     @GET("api/notes/trash/")
-    suspend fun getTrashNotes(): List<Note>
+    suspend fun getTrashNotes(
+        @Query("page") page: Int = 1,
+        @Query("page_size") pageSize: Int = 100,
+        @Query("ordering") ordering: String? = "id"
+    ): PagedResponse<Note>
 
     @PATCH("api/notes/{id}/restore/")
     suspend fun restoreNote(@Path("id") id: Int)
@@ -83,4 +102,15 @@ interface ApiService {
 
     @PATCH("api/notes/{id}/unarchive/")
     suspend fun unarchiveNote(@Path("id") id: Int)
+
+    @Multipart
+    @POST("api/notes/{id}/attachments/")
+    suspend fun uploadAttachment(@Path("id") noteId: Int, @Part file: MultipartBody.Part): Attachment
+
+    @Streaming
+    @GET("api/attachments/{id}/file/")
+    suspend fun downloadAttachment(@Path("id") attachmentId: Int): ResponseBody
+
+    @DELETE("api/attachments/{id}/")
+    suspend fun deleteAttachment(@Path("id") attachmentId: Int)
 }

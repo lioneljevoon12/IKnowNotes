@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.ActivityNotFoundException
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -18,7 +20,10 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -28,6 +33,11 @@ import java.util.Calendar
 import com.example.iknownotes.R
 import com.example.iknownotes.data.local.DraftStore
 import com.example.iknownotes.data.local.NoteDraft
+import com.example.iknownotes.data.local.PendingUpload
+import com.example.iknownotes.data.model.AttachmentItem
+import com.example.iknownotes.ui.attachments.AttachmentAdapter
+import com.example.iknownotes.ui.attachments.ImageViewerActivity
+import com.example.iknownotes.util.ImageProcessor
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
@@ -38,9 +48,12 @@ import com.example.iknownotes.util.ChecklistHelper
 import com.example.iknownotes.util.NoteColorPalette
 import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class NoteEditActivity : AppCompatActivity() {
 
@@ -76,6 +89,35 @@ class NoteEditActivity : AppCompatActivity() {
     private var exiting = false
     private var draftJob: Job? = null
 
+    // ---- image attachments (applied only when the note is saved)
+    private val attachmentItems = mutableListOf<AttachmentItem>()
+
+    /** Images added in this session; their files are deleted unless the note is saved. */
+    private val stagedImages = mutableListOf<PendingUpload>()
+    private val removedServerIds = mutableSetOf<Int>()
+    private val removedPendingPaths = mutableSetOf<String>()
+    private var cameraFile: File? = null
+    private lateinit var attachmentAdapter: AttachmentAdapter
+
+    private val attachmentsDirty: Boolean
+        get() = stagedImages.isNotEmpty() || removedServerIds.isNotEmpty() || removedPendingPaths.isNotEmpty()
+
+    private val pickImages =
+        registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK_AT_ONCE)) { uris ->
+            addImages(uris)
+        }
+
+    private val takePicture =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+            val file = cameraFile
+            cameraFile = null
+            if (taken && file != null) {
+                addImages(listOf(Uri.fromFile(file))) { file.delete() }
+            } else {
+                file?.delete()
+            }
+        }
+
     private data class EditorState(
         val title: String,
         val contentHtml: String,
@@ -109,6 +151,7 @@ class NoteEditActivity : AppCompatActivity() {
         })
 
         setupDraftAutosave()
+        setupAttachments()
         setupFormattingToolbar()
         buildColorSwatches()
         setupReminder()
@@ -351,6 +394,9 @@ class NoteEditActivity : AppCompatActivity() {
                     reminderMillis = ReminderHelper.parseIso(note.reminderTime)
                     renderReminder()
                     noteLoaded = true
+                    attachmentItems.clear()
+                    attachmentItems += notesRepository.getAttachmentItems(noteId)
+                    renderAttachments()
                     setupFolderSpinner()
                 }
                 .onFailure {
@@ -391,6 +437,7 @@ class NoteEditActivity : AppCompatActivity() {
             result
                 .onSuccess { saved ->
                     ReminderScheduler.sync(this@NoteEditActivity, saved)
+                    applyAttachmentChanges(saved.id)
                     exiting = true
                     draftJob?.cancel()
                     draftStore.clear(draftKey)
@@ -398,6 +445,129 @@ class NoteEditActivity : AppCompatActivity() {
                 }
                 .onFailure { showSnackbar(it.message ?: "Gagal menyimpan catatan") }
         }
+    }
+
+    // ------------------------------------------------------- image attachments
+
+    private fun setupAttachments() {
+        attachmentAdapter = AttachmentAdapter(
+            thumbnailPx = (88 * resources.displayMetrics.density).toInt(),
+            onClick = { startActivity(ImageViewerActivity.intentFor(this, it)) },
+            onRemove = { removeAttachment(it) }
+        )
+        binding.rvAttachments.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvAttachments.adapter = attachmentAdapter
+        binding.btnAddPhoto.setOnClickListener { launchCamera() }
+        binding.btnAddGallery.setOnClickListener { launchGallery() }
+        renderAttachments()
+    }
+
+    private fun renderAttachments() {
+        attachmentAdapter.submitList(attachmentItems.toList())
+        binding.rvAttachments.visibility = if (attachmentItems.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun launchGallery() {
+        if (attachmentItems.size >= MAX_ATTACHMENTS) {
+            showSnackbar(getString(R.string.attachment_limit, MAX_ATTACHMENTS))
+            return
+        }
+        pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    private fun launchCamera() {
+        if (attachmentItems.size >= MAX_ATTACHMENTS) {
+            showSnackbar(getString(R.string.attachment_limit, MAX_ATTACHMENTS))
+            return
+        }
+        val dir = File(cacheDir, "camera").apply { mkdirs() }
+        val file = File(dir, "photo_${System.currentTimeMillis()}.jpg")
+        cameraFile = file
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        try {
+            takePicture.launch(uri)
+        } catch (e: ActivityNotFoundException) {
+            cameraFile = null
+            showSnackbar(getString(R.string.camera_unavailable))
+        }
+    }
+
+    /** Compresses the picked images off the main thread and stages them for the next save. */
+    private fun addImages(uris: List<Uri>, onDone: () -> Unit = {}) {
+        if (uris.isEmpty()) {
+            onDone()
+            return
+        }
+        val room = MAX_ATTACHMENTS - attachmentItems.size
+        val accepted = uris.take(room.coerceAtLeast(0))
+        if (accepted.size < uris.size) {
+            showSnackbar(getString(R.string.attachment_limit, MAX_ATTACHMENTS))
+        }
+        lifecycleScope.launch {
+            var failed = 0
+            for (uri in accepted) {
+                val out = ImageProcessor.newPendingFile(this@NoteEditActivity)
+                val name = ImageProcessor.displayName(this@NoteEditActivity, uri)
+                val ok = withContext(Dispatchers.IO) {
+                    ImageProcessor.compress(this@NoteEditActivity, uri, out)
+                }
+                if (ok) {
+                    stagedImages += PendingUpload(out.absolutePath, name, ImageProcessor.MIME)
+                    attachmentItems += AttachmentItem(
+                        key = "local:${out.absolutePath}", name = name, localPath = out.absolutePath
+                    )
+                } else {
+                    failed++
+                }
+            }
+            onDone()
+            renderAttachments()
+            if (failed > 0) showSnackbar(getString(R.string.attachment_failed))
+        }
+    }
+
+    private fun removeAttachment(item: AttachmentItem) {
+        attachmentItems.removeAll { it.key == item.key }
+        val serverAttachment = item.attachment
+        val path = item.localPath
+        when {
+            serverAttachment != null -> removedServerIds += serverAttachment.id
+            path != null -> {
+                val staged = stagedImages.firstOrNull { it.localPath == path }
+                if (staged != null) {
+                    // Added in this session and never saved: just throw the file away.
+                    stagedImages.remove(staged)
+                    File(path).delete()
+                } else {
+                    removedPendingPaths += path // queued earlier, removed when this note is saved
+                }
+            }
+        }
+        renderAttachments()
+    }
+
+    /** Hands the changes to the repository, which uploads/deletes when online. */
+    private suspend fun applyAttachmentChanges(noteId: Int) {
+        removedServerIds.forEach { notesRepository.removeAttachment(noteId, it) }
+        removedPendingPaths.forEach { notesRepository.removePendingUpload(noteId, it) }
+        stagedImages.forEach {
+            notesRepository.addAttachment(noteId, File(it.localPath), it.name, it.mime)
+        }
+        stagedImages.clear()
+        removedServerIds.clear()
+        removedPendingPaths.clear()
+    }
+
+    private fun discardStagedImages() {
+        stagedImages.forEach { File(it.localPath).delete() }
+        stagedImages.clear()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Leaving without saving must not leave compressed images behind.
+        if (isFinishing && !exiting) discardStagedImages()
     }
 
     // ------------------------------------------------- drafts & unsaved changes
@@ -426,10 +596,14 @@ class NoteEditActivity : AppCompatActivity() {
         reminderMillis = reminderMillis
     )
 
-    private fun isDirty(): Boolean {
+    /** Text, colour, folder or reminder changed (what drafts cover). */
+    private fun isTextDirty(): Boolean {
         val initial = initialState ?: return false
         return currentState() != initial
     }
+
+    /** Anything unsaved, including added/removed images. */
+    private fun isDirty(): Boolean = isTextDirty() || (initialState != null && attachmentsDirty)
 
     /** Remembers the freshly loaded editor so later edits can be detected. */
     private fun maybeCaptureInitialState() {
@@ -491,7 +665,7 @@ class NoteEditActivity : AppCompatActivity() {
 
     private fun persistDraft() {
         if (initialState == null || draftDecisionPending || exiting) return
-        if (!isDirty()) {
+        if (!isTextDirty()) {
             draftStore.clear(draftKey)
             return
         }
@@ -512,6 +686,7 @@ class NoteEditActivity : AppCompatActivity() {
     private fun requestExit() {
         if (!isDirty()) {
             draftStore.clear(draftKey)
+            discardStagedImages()
             exiting = true
             finish()
             return
@@ -523,6 +698,7 @@ class NoteEditActivity : AppCompatActivity() {
             .setNegativeButton(R.string.action_discard) { _, _ ->
                 draftJob?.cancel()
                 draftStore.clear(draftKey)
+                discardStagedImages()
                 exiting = true
                 finish()
             }
@@ -543,5 +719,7 @@ class NoteEditActivity : AppCompatActivity() {
         const val EXTRA_NOTE_ID = "extra_note_id"
         const val EXTRA_FOLDER_ID = "extra_folder_id"
         private const val AUTOSAVE_DELAY_MS = 1500L
+        private const val MAX_ATTACHMENTS = 10
+        private const val MAX_PICK_AT_ONCE = 5
     }
 }

@@ -3,10 +3,14 @@ package com.example.iknownotes.data.repo
 import android.content.Context
 import com.example.iknownotes.data.local.CachedNote
 import com.example.iknownotes.data.local.LocalStore
+import com.example.iknownotes.data.local.PendingUpload
+import com.example.iknownotes.data.model.Attachment
+import com.example.iknownotes.data.model.AttachmentItem
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.FolderRequest
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
+import com.example.iknownotes.data.model.PagedResponse
 import com.example.iknownotes.data.remote.ApiService
 import com.example.iknownotes.data.remote.RetrofitClient
 import com.example.iknownotes.reminder.ReminderScheduler
@@ -20,6 +24,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
@@ -52,7 +59,8 @@ class NotesRepository internal constructor(
     private val onTempIdReplaced: (tempId: Int, note: Note) -> Unit = { _, _ -> },
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val autoSync: Boolean = true,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val pageSize: Int = PAGE_SIZE
 ) {
 
     private val syncMutex = Mutex()
@@ -92,7 +100,7 @@ class NotesRepository internal constructor(
             val query = search?.ifBlank { null }
             if (!syncPending()) return@withContext Result.success(cachedActive(folderId, query))
 
-            val result = safeApiCall { api.getNotes(folderId, query) }
+            val result = safeApiCall { fetchAllPages { page -> api.getNotes(folderId, query, page, pageSize) } }
             result.onSuccess { list ->
                 if (folderId == null && query == null) {
                     replaceSet(list) { it.deletedAt == null && !it.isArchived }
@@ -112,7 +120,7 @@ class NotesRepository internal constructor(
         ensureOwner()
         if (!syncPending()) return@withContext Result.success(cachedArchived())
 
-        val result = safeApiCall { api.getArchivedNotes() }
+        val result = safeApiCall { fetchAllPages { page -> api.getArchivedNotes(page, pageSize) } }
         result.onSuccess { list ->
             replaceSet(list) { it.deletedAt == null && it.isArchived }
             markOnline()
@@ -128,7 +136,7 @@ class NotesRepository internal constructor(
         ensureOwner()
         if (!syncPending()) return@withContext Result.success(cachedTrash())
 
-        val result = safeApiCall { api.getTrashNotes() }
+        val result = safeApiCall { fetchAllPages { page -> api.getTrashNotes(page, pageSize) } }
         result.onSuccess { list ->
             replaceSet(list) { it.deletedAt != null }
             markOnline()
@@ -238,6 +246,7 @@ class NotesRepository internal constructor(
     suspend fun permanentlyDeleteNote(id: Int): Result<Unit> = withContext(Dispatchers.IO) {
         ensureOwner()
         val realId = resolve(id)
+        deleteFiles(store.read().notes.firstOrNull { it.note.id == realId }?.uploads.orEmpty())
         store.edit { data ->
             val target = data.notes.firstOrNull { it.note.id == realId }
             data.copy(
@@ -253,6 +262,7 @@ class NotesRepository internal constructor(
 
     suspend fun emptyTrash(): Result<Unit> = withContext(Dispatchers.IO) {
         ensureOwner()
+        deleteFiles(store.read().notes.filter { it.note.deletedAt != null }.flatMap { it.uploads })
         store.edit { data ->
             val trashed = data.notes.filter { it.note.deletedAt != null }
             val trashedIds = trashed.map { it.note.id }.toSet()
@@ -267,8 +277,52 @@ class NotesRepository internal constructor(
         Result.success(Unit)
     }
 
+    // ------------------------------------------------------------ attachments
+
+    /** Everything shown in a note's image strip: uploaded images, then ones waiting to upload. */
+    suspend fun getAttachmentItems(noteId: Int): List<AttachmentItem> = withContext(Dispatchers.IO) {
+        val cached = store.read().notes.firstOrNull { it.note.id == resolve(noteId) }
+            ?: return@withContext emptyList()
+        cached.note.attachments.orEmpty().map {
+            AttachmentItem(key = "remote:${it.id}", name = it.originalName, attachment = it)
+        } + cached.uploads.map {
+            AttachmentItem(key = "local:${it.localPath}", name = it.name, localPath = it.localPath)
+        }
+    }
+
+    /** Queues an already-compressed image (owned by the repository from now on) for upload. */
+    suspend fun addAttachment(noteId: Int, file: File, name: String, mime: String): Result<Unit> =
+        mutateNote(noteId) { cached, nowIso ->
+            cached.copy(
+                note = cached.note.copy(updatedAt = nowIso),
+                pendingUploads = cached.uploads + PendingUpload(file.absolutePath, name, mime)
+            )
+        }.map { }
+
+    /** Removes an image that is already on the server (the delete is pushed when online). */
+    suspend fun removeAttachment(noteId: Int, attachmentId: Int): Result<Unit> =
+        mutateNote(noteId) { cached, nowIso ->
+            cached.copy(
+                note = cached.note.copy(
+                    attachments = cached.note.attachments.orEmpty().filterNot { it.id == attachmentId },
+                    updatedAt = nowIso
+                ),
+                pendingAttachmentDeletes = (cached.attachmentDeletes + attachmentId).distinct()
+            )
+        }.map { }
+
+    /** Drops an image that never reached the server and deletes its file. */
+    suspend fun removePendingUpload(noteId: Int, localPath: String): Result<Unit> {
+        val result = mutateNote(noteId) { cached, _ ->
+            cached.copy(pendingUploads = cached.uploads.filterNot { it.localPath == localPath })
+        }.map { }
+        File(localPath).delete()
+        return result
+    }
+
     /** Removes the cache entirely (explicit logout). */
     fun clearLocalData() {
+        deleteFiles(store.read().notes.flatMap { it.uploads })
         store.clear()
         _status.value = SyncStatus()
     }
@@ -325,8 +379,57 @@ class NotesRepository internal constructor(
         val changed = store.read().notes.filter { !it.isNew && it.isDirty }
         for (cached in changed) {
             if (!pushChanged(cached)) return false
+            if (!pushAttachments(cached.note.id)) return false
         }
         return true
+    }
+
+    /**
+     * Uploads images picked offline and deletes ones the user removed. Notes in the
+     * trash wait (the server refuses uploads to them) until they are restored.
+     */
+    private suspend fun pushAttachments(noteId: Int): Boolean {
+        val start = store.read().notes.firstOrNull { it.note.id == noteId } ?: return true
+        if (start.note.deletedAt != null) return true
+
+        for (attachmentId in start.attachmentDeletes) {
+            // 404 just means it is already gone.
+            if (safeApiCall { api.deleteAttachment(attachmentId) }.isNetworkFailure()) return false
+            updateEntry(noteId) { it.copy(pendingAttachmentDeletes = it.attachmentDeletes - attachmentId) }
+        }
+
+        for (upload in start.uploads) {
+            val file = File(upload.localPath)
+            if (!file.exists()) {
+                updateEntry(noteId) { it.copy(pendingUploads = it.uploads - upload) }
+                continue
+            }
+            val part = MultipartBody.Part.createFormData(
+                "file", upload.name, file.asRequestBody(upload.mime.toMediaType())
+            )
+            val result = safeApiCall { api.uploadAttachment(noteId, part) }
+            if (result.isNetworkFailure()) return false
+
+            val uploaded = result.getOrNull()
+            val rejected = (result.httpCode() ?: 0) in 400..499 // retrying would never help
+            if (uploaded != null || rejected) {
+                updateEntry(noteId) {
+                    it.copy(
+                        pendingUploads = it.uploads - upload,
+                        note = if (uploaded == null) it.note
+                        else it.note.copy(attachments = it.note.attachments.orEmpty() + uploaded)
+                    )
+                }
+                file.delete()
+            }
+        }
+        return true
+    }
+
+    private fun updateEntry(noteId: Int, change: (CachedNote) -> CachedNote) {
+        store.edit { data ->
+            data.copy(notes = data.notes.map { if (it.note.id == noteId) change(it) else it })
+        }
     }
 
     private suspend fun pushCreated(cached: CachedNote): Boolean {
@@ -365,7 +468,9 @@ class NotesRepository internal constructor(
                         dirtyFields = editedMeanwhile,
                         dirtyArchive = local.note.isArchived,
                         dirtyTrash = local.note.deletedAt != null,
-                        rev = local.rev
+                        rev = local.rev,
+                        pendingUploads = local.pendingUploads,
+                        pendingAttachmentDeletes = local.pendingAttachmentDeletes
                     )
                 },
                 idMap = data.idMap + (note.id to server.id)
@@ -401,6 +506,7 @@ class NotesRepository internal constructor(
         if (!gone && cached.dirtyTrash && note.deletedAt != null) {
             if (safeApiCall { api.deleteNote(id) }.isNetworkFailure()) return false
         }
+        if (gone) deleteFiles(cached.uploads)
 
         store.edit { data ->
             data.copy(
@@ -461,7 +567,29 @@ class NotesRepository internal constructor(
         _status.value = _status.value.copy(offline = false, pendingChanges = store.read().pendingCount)
     }
 
-    private fun ensureOwner() = store.ensureOwner(currentUser())
+    private fun ensureOwner() {
+        // Another account's unsynced images must not linger in app storage.
+        store.ensureOwner(currentUser())?.let { discarded ->
+            deleteFiles(discarded.notes.flatMap { it.uploads })
+        }
+    }
+
+    private fun deleteFiles(uploads: List<PendingUpload>) {
+        uploads.forEach { File(it.localPath).delete() }
+    }
+
+    /** DRF pages -> one list. Pages are fetched in id order so edits can't shift them. */
+    private suspend fun <T> fetchAllPages(fetch: suspend (page: Int) -> PagedResponse<T>): List<T> {
+        val all = mutableListOf<T>()
+        var page = 1
+        while (page <= MAX_PAGES) {
+            val response = fetch(page)
+            all += response.results
+            if (response.next == null) break
+            page++
+        }
+        return all
+    }
 
     private fun resolve(id: Int): Int = store.read().idMap[id] ?: id
 
@@ -519,6 +647,8 @@ class NotesRepository internal constructor(
             .sortedByDescending { it.deletedAt.orEmpty() }
 
     companion object {
+        const val PAGE_SIZE = 100
+        private const val MAX_PAGES = 500
         private const val CACHE_FILE = "offline_cache.json"
 
         @Volatile

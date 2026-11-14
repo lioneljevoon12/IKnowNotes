@@ -1,11 +1,13 @@
 package com.example.iknownotes
 
 import com.example.iknownotes.data.local.LocalStore
+import com.example.iknownotes.data.model.Attachment
 import com.example.iknownotes.data.model.Folder
 import com.example.iknownotes.data.model.FolderRequest
 import com.example.iknownotes.data.model.LoginRequest
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
+import com.example.iknownotes.data.model.PagedResponse
 import com.example.iknownotes.data.model.RefreshRequest
 import com.example.iknownotes.data.model.RefreshResponse
 import com.example.iknownotes.data.model.RegisterRequest
@@ -13,6 +15,8 @@ import com.example.iknownotes.data.model.TokenResponse
 import com.example.iknownotes.data.remote.ApiService
 import com.example.iknownotes.data.repo.NotesRepository
 import kotlinx.coroutines.runBlocking
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,9 +34,14 @@ import java.io.IOException
 private class FakeApi : ApiService {
     var online = true
     var rejectFolderId: Int? = null
+    /** When set, uploads fail with this HTTP status. */
+    var uploadError: Int? = null
     val server = mutableMapOf<Int, Note>()
     val calls = mutableListOf<String>()
+    val uploadedTo = mutableListOf<Int>()
+    val deletedAttachments = mutableListOf<Int>()
     private var nextId = 100
+    private var nextAttachmentId = 900
 
     fun seed(title: String, archived: Boolean = false, deletedAt: String? = null): Note {
         val note = Note(
@@ -67,14 +76,27 @@ private class FakeApi : ApiService {
     override suspend fun updateFolder(id: Int, body: FolderRequest): Folder = TODO()
     override suspend fun deleteFolder(id: Int) = TODO()
 
-    override suspend fun getNotes(folderId: Int?, search: String?): List<Note> {
-        check("getNotes")
-        return server.values.filter { it.deletedAt == null && !it.isArchived }
+    private fun paged(items: Collection<Note>, page: Int, pageSize: Int): PagedResponse<Note> {
+        val sorted = items.sortedBy { it.id }
+        val from = (page - 1) * pageSize
+        return PagedResponse(
+            count = sorted.size,
+            next = if (from + pageSize < sorted.size) "next" else null,
+            previous = if (page > 1) "previous" else null,
+            results = sorted.drop(from).take(pageSize)
+        )
     }
 
-    override suspend fun getArchivedNotes(): List<Note> {
+    override suspend fun getNotes(
+        folderId: Int?, search: String?, page: Int, pageSize: Int, ordering: String?
+    ): PagedResponse<Note> {
+        check("getNotes")
+        return paged(server.values.filter { it.deletedAt == null && !it.isArchived }, page, pageSize)
+    }
+
+    override suspend fun getArchivedNotes(page: Int, pageSize: Int, ordering: String?): PagedResponse<Note> {
         check("getArchivedNotes")
-        return server.values.filter { it.deletedAt == null && it.isArchived }
+        return paged(server.values.filter { it.deletedAt == null && it.isArchived }, page, pageSize)
     }
 
     override suspend fun getNote(id: Int): Note { check("getNote"); return live(id) }
@@ -107,9 +129,9 @@ private class FakeApi : ApiService {
         server[id] = live(id).copy(deletedAt = "2026-03-01T00:00:00Z")
     }
 
-    override suspend fun getTrashNotes(): List<Note> {
+    override suspend fun getTrashNotes(page: Int, pageSize: Int, ordering: String?): PagedResponse<Note> {
         check("getTrashNotes")
-        return server.values.filter { it.deletedAt != null }
+        return paged(server.values.filter { it.deletedAt != null }, page, pageSize)
     }
 
     override suspend fun restoreNote(id: Int) {
@@ -140,6 +162,26 @@ private class FakeApi : ApiService {
         check("unarchiveNote")
         server[id] = live(id).copy(isArchived = false)
     }
+
+    override suspend fun uploadAttachment(noteId: Int, file: MultipartBody.Part): Attachment {
+        check("uploadAttachment")
+        val note = live(noteId) // 404 for trashed or unknown notes, like the real server
+        uploadError?.let { http(it) }
+        val attachment = Attachment(id = nextAttachmentId++, originalName = "foto.jpg", contentType = "image/jpeg", size = 3)
+        server[noteId] = note.copy(attachments = note.attachments.orEmpty() + attachment)
+        uploadedTo += noteId
+        return attachment
+    }
+
+    override suspend fun downloadAttachment(attachmentId: Int): ResponseBody = TODO()
+
+    override suspend fun deleteAttachment(attachmentId: Int) {
+        check("deleteAttachment")
+        val owner = server.values.firstOrNull { note -> note.attachments.orEmpty().any { it.id == attachmentId } }
+            ?: http(404)
+        server[owner.id] = owner.copy(attachments = owner.attachments.orEmpty().filterNot { it.id == attachmentId })
+        deletedAttachments += attachmentId
+    }
 }
 
 class NotesRepositoryOfflineTest {
@@ -158,14 +200,17 @@ class NotesRepositoryOfflineTest {
         repo = newRepository(store)
     }
 
-    private fun newRepository(store: LocalStore) = NotesRepository(
+    private fun newRepository(store: LocalStore, pageSize: Int = 100) = NotesRepository(
         api = api,
         store = store,
         currentUser = { user },
         onTempIdReplaced = { temp, note -> replacedIds += temp to note.id },
         autoSync = false,
-        clock = { clockMillis.also { clockMillis += 1000 } }
+        clock = { clockMillis.also { clockMillis += 1000 } },
+        pageSize = pageSize
     )
+
+    private fun pendingImage(): File = File.createTempFile("pending", ".jpg").also { it.writeBytes(byteArrayOf(1, 2, 3)) }
 
     private fun request(title: String, folder: Int? = null) =
         NoteRequest(folder, title, "isi", "yellow", false, null)
@@ -371,6 +416,158 @@ class NotesRepositoryOfflineTest {
         user = "ani"
         assertTrue(repo.getNotes().getOrThrow().isEmpty())
         assertEquals(0, store.read().pendingCount)
+    }
+
+    @Test
+    fun lists_areFetchedPageByPage_untilThereIsNoNextPage() = runBlocking {
+        repeat(5) { api.seed("Catatan $it") }
+        val paged = newRepository(store, pageSize = 2)
+
+        val notes = paged.getNotes().getOrThrow()
+
+        assertEquals(5, notes.size)
+        assertEquals(3, api.calls.count { it == "getNotes" })
+        assertEquals(5, paged.getNotes().getOrThrow().map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun archiveAndTrash_arePagedToo() = runBlocking {
+        repeat(3) { api.seed("Arsip $it", archived = true) }
+        repeat(3) { api.seed("Sampah $it", deletedAt = "2026-03-01T00:00:00Z") }
+        val paged = newRepository(store, pageSize = 2)
+
+        assertEquals(3, paged.getArchivedNotes().getOrThrow().size)
+        assertEquals(3, paged.getTrashNotes().getOrThrow().size)
+        assertEquals(2, api.calls.count { it == "getArchivedNotes" })
+        assertEquals(2, api.calls.count { it == "getTrashNotes" })
+    }
+
+    @Test
+    fun imagePickedOffline_onANewNote_isUploadedOnceTheNoteExists() = runBlocking {
+        api.online = false
+        val created = repo.createNote(request("Dengan foto")).getOrThrow()
+        val image = pendingImage()
+        repo.addAttachment(created.id, image, "foto.jpg", "image/jpeg")
+
+        val before = repo.getAttachmentItems(created.id)
+        assertEquals(1, before.size)
+        assertTrue(before.single().isPending)
+
+        api.online = true
+        assertTrue(repo.syncPending())
+
+        val realId = api.server.keys.single()
+        assertEquals(listOf(realId), api.uploadedTo)
+        assertEquals(0, repo.status.value.pendingChanges)
+        assertFalse("the temp file is cleaned up", image.exists())
+
+        // The temporary id still resolves, and the image is now a server attachment.
+        val after = repo.getAttachmentItems(created.id)
+        assertEquals(1, after.size)
+        assertFalse(after.single().isPending)
+    }
+
+    @Test
+    fun removingAServerImageOffline_deletesItOnTheServerAfterSync() = runBlocking {
+        val note = api.seed("Ada gambar")
+        api.server[note.id] = note.copy(attachments = listOf(Attachment(500, "lama.jpg")))
+        repo.getNotes()
+        assertEquals(1, repo.getAttachmentItems(note.id).size)
+
+        api.online = false
+        repo.removeAttachment(note.id, 500)
+        assertTrue(repo.getAttachmentItems(note.id).isEmpty())
+        assertEquals(1, repo.status.value.pendingChanges)
+
+        api.online = true
+        repo.syncPending()
+        assertEquals(listOf(500), api.deletedAttachments)
+        assertEquals(0, repo.status.value.pendingChanges)
+    }
+
+    @Test
+    fun removingAnImageThatWasNeverUploaded_justDeletesTheFile() = runBlocking {
+        val note = api.seed("Catatan")
+        repo.getNotes()
+        val image = pendingImage()
+        repo.addAttachment(note.id, image, "foto.jpg", "image/jpeg")
+
+        repo.removePendingUpload(note.id, image.absolutePath)
+
+        assertFalse(image.exists())
+        assertTrue(repo.getAttachmentItems(note.id).isEmpty())
+        assertEquals(0, repo.status.value.pendingChanges)
+        repo.syncPending()
+        assertTrue(api.uploadedTo.isEmpty())
+    }
+
+    @Test
+    fun uploadRejectedByServer_isDroppedInsteadOfRetriedForever() = runBlocking {
+        val note = api.seed("Catatan")
+        repo.getNotes()
+        val image = pendingImage()
+        repo.addAttachment(note.id, image, "rusak.jpg", "image/jpeg")
+        api.uploadError = 400
+
+        repo.syncPending()
+
+        assertEquals(0, repo.status.value.pendingChanges)
+        assertFalse(image.exists())
+    }
+
+    @Test
+    fun imagesOfATrashedNote_waitUntilItIsRestored() = runBlocking {
+        val note = api.seed("Catatan")
+        repo.getNotes()
+        val image = pendingImage()
+        repo.addAttachment(note.id, image, "foto.jpg", "image/jpeg")
+        repo.deleteNote(note.id)
+
+        repo.syncPending()
+        assertTrue("trashed notes get no uploads", api.uploadedTo.isEmpty())
+        assertTrue(image.exists())
+        assertEquals(1, repo.status.value.pendingChanges)
+
+        repo.restoreNote(note.id)
+        repo.syncPending()
+
+        assertEquals(listOf(note.id), api.uploadedTo)
+        assertEquals(0, repo.status.value.pendingChanges)
+    }
+
+    @Test
+    fun permanentlyDeletingANote_deletesItsPendingImages() = runBlocking {
+        val note = api.seed("Catatan")
+        repo.getNotes()
+        val image = pendingImage()
+        repo.addAttachment(note.id, image, "foto.jpg", "image/jpeg")
+        repo.deleteNote(note.id)
+
+        repo.permanentlyDeleteNote(note.id)
+
+        assertFalse(image.exists())
+    }
+
+    @Test
+    fun pendingImages_surviveRestart() = runBlocking {
+        val file = File.createTempFile("cache", ".json")
+        val image = pendingImage()
+        try {
+            api.online = false
+            val first = newRepository(LocalStore(file))
+            val created = first.createNote(request("Tahan banting")).getOrThrow()
+            first.addAttachment(created.id, image, "foto.jpg", "image/jpeg")
+
+            val reopened = newRepository(LocalStore(file))
+            assertEquals(1, reopened.getAttachmentItems(created.id).size)
+
+            api.online = true
+            reopened.syncPending()
+            assertEquals(1, api.uploadedTo.size)
+        } finally {
+            file.delete()
+            image.delete()
+        }
     }
 
     @Test

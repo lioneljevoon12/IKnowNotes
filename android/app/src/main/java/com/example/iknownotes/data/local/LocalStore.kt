@@ -24,10 +24,22 @@ data class CachedNote(
     val dirtyFields: Boolean = false,
     val dirtyArchive: Boolean = false,
     val dirtyTrash: Boolean = false,
-    val rev: Int = 0
+    val rev: Int = 0,
+    /** Images picked on this device that still have to be uploaded (nullable: old caches lack it). */
+    val pendingUploads: List<PendingUpload>? = null,
+    /** Server attachment ids the user removed that still have to be deleted on the server. */
+    val pendingAttachmentDeletes: List<Int>? = null
 ) {
-    val isDirty: Boolean get() = isNew || dirtyFields || dirtyArchive || dirtyTrash
+    val uploads: List<PendingUpload> get() = pendingUploads.orEmpty()
+    val attachmentDeletes: List<Int> get() = pendingAttachmentDeletes.orEmpty()
+
+    val isDirty: Boolean
+        get() = isNew || dirtyFields || dirtyArchive || dirtyTrash ||
+            uploads.isNotEmpty() || attachmentDeletes.isNotEmpty()
 }
+
+/** A compressed image stored in the app's private storage, waiting for the note to sync. */
+data class PendingUpload(val localPath: String, val name: String, val mime: String)
 
 data class CacheData(
     /** Username the cache belongs to, so another account never sees it. */
@@ -66,12 +78,17 @@ class LocalStore(private val file: File?) {
         persist()
     }
 
-    /** Wipes the cache when it belongs to someone other than [user]. */
+    /**
+     * Wipes the cache when it belongs to someone other than [user].
+     * @return the data that was discarded (so its files can be cleaned up), or null.
+     */
     @Synchronized
-    fun ensureOwner(user: String?) {
-        if (user == null || data.owner == user) return
+    fun ensureOwner(user: String?): CacheData? {
+        if (user == null || data.owner == user) return null
+        val discarded = data
         data = CacheData(owner = user)
         persist()
+        return discarded
     }
 
     @Synchronized

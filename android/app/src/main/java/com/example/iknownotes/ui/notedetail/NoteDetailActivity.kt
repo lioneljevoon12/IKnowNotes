@@ -18,6 +18,9 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.iknownotes.ui.attachments.AttachmentAdapter
+import com.example.iknownotes.ui.attachments.ImageViewerActivity
 import com.example.iknownotes.R
 import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
@@ -45,6 +48,8 @@ class NoteDetailActivity : AppCompatActivity() {
 
     /** The note's content as shown (without the display-only checklist styling). */
     private var currentBody: Spanned = SpannableStringBuilder("")
+
+    private lateinit var attachmentAdapter: AttachmentAdapter
 
     private val exportTxtLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
@@ -74,6 +79,14 @@ class NoteDetailActivity : AppCompatActivity() {
         binding.btnArchive.setOnClickListener { toggleArchive() }
         binding.btnPin.setOnClickListener { togglePin() }
         binding.btnShare.setOnClickListener { showShareMenu() }
+
+        attachmentAdapter = AttachmentAdapter(
+            thumbnailPx = (88 * resources.displayMetrics.density).toInt(),
+            onClick = { startActivity(ImageViewerActivity.intentFor(this, it)) }
+        )
+        binding.rvAttachments.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvAttachments.adapter = attachmentAdapter
 
         loadFolders()
         loadNote()
@@ -110,6 +123,7 @@ class NoteDetailActivity : AppCompatActivity() {
         binding.progress.visibility = View.GONE
         binding.tvTitle.text = note.title
         renderContent(note)
+        loadAttachments()
         val folderName = folders.firstOrNull { it.id == note.folder }?.name
         if (folderName != null) {
             binding.tvFolder.text = folderName
@@ -173,6 +187,14 @@ class NoteDetailActivity : AppCompatActivity() {
             binding.tvContent.movementMethod = LinkMovementMethod.getInstance()
         }
         binding.tvContent.text = display
+    }
+
+    private fun loadAttachments() {
+        lifecycleScope.launch {
+            val items = notesRepository.getAttachmentItems(noteId)
+            attachmentAdapter.submitList(items)
+            binding.rvAttachments.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+        }
     }
 
     private fun toggleChecklistItem(lineStart: Int) {
