@@ -62,8 +62,22 @@ interface ApiService {
     @PATCH("api/notes/{id}/")
     suspend fun updateNote(@Path("id") id: Int, @Body body: NoteRequest): Note
 
+    /** Soft delete: moves the note to the trash. */
     @DELETE("api/notes/{id}/")
-    suspend fun deleteNote(@Path("id") id: Int): Response<Unit>
+    suspend fun deleteNote(@Path("id") id: Int)
+
+    @GET("api/notes/trash/")
+    suspend fun getTrashNotes(): List<Note>
+
+    @PATCH("api/notes/{id}/restore/")
+    suspend fun restoreNote(@Path("id") id: Int)
+
+    /** Only works for notes already in the trash. */
+    @DELETE("api/notes/{id}/permanent/")
+    suspend fun permanentlyDeleteNote(@Path("id") id: Int)
+
+    @DELETE("api/notes/trash/empty/")
+    suspend fun emptyTrash()
 
     @PATCH("api/notes/{id}/archive/")
     suspend fun archiveNote(@Path("id") id: Int): Response<Unit>

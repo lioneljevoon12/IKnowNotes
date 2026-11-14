@@ -40,6 +40,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.trash.TrashActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.notedetail.NoteDetailActivity"
             android:exported="false" />
 

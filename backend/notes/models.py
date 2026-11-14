@@ -43,6 +43,10 @@ class Note(models.Model):
     is_pinned = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
 
+    # Soft delete: a note with deleted_at set lives in the trash until it is
+    # restored, permanently deleted, or purged after TRASH_RETENTION_DAYS.
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     reminder_time = models.DateTimeField(null=True, blank=True)
     is_reminded = models.BooleanField(default=False)
 

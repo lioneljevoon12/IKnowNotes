@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.iknownotes.R
@@ -120,7 +121,7 @@ class NoteDetailActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_delete_title)
             .setMessage(R.string.confirm_delete_message)
-            .setPositiveButton(R.string.action_delete) { _, _ -> deleteNote() }
+            .setPositiveButton(R.string.action_move_to_trash) { _, _ -> deleteNote() }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
@@ -129,10 +130,16 @@ class NoteDetailActivity : AppCompatActivity() {
         lifecycleScope.launch {
             notesRepository.deleteNote(noteId)
                 .onSuccess {
+                    // Trashed notes shouldn't alert; syncAll re-arms it if restored.
                     ReminderScheduler.cancel(this@NoteDetailActivity, noteId)
+                    Toast.makeText(
+                        this@NoteDetailActivity,
+                        R.string.note_moved_to_trash,
+                        Toast.LENGTH_SHORT
+                    ).show()
                     finish()
                 }
-                .onFailure { showSnackbar(it.message ?: "Gagal menghapus catatan") }
+                .onFailure { showSnackbar(it.message ?: "Gagal memindahkan catatan ke sampah") }
         }
     }
 

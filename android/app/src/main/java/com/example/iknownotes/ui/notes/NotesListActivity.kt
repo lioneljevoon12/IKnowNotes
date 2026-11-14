@@ -22,6 +22,7 @@ import com.example.iknownotes.reminder.ReminderScheduler
 import com.example.iknownotes.ui.auth.LoginActivity
 import com.example.iknownotes.ui.notedetail.NoteDetailActivity
 import com.example.iknownotes.ui.noteedit.NoteEditActivity
+import com.example.iknownotes.ui.trash.TrashActivity
 import com.google.android.material.chip.Chip
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Job
@@ -98,6 +99,9 @@ class NotesListActivity : AppCompatActivity() {
     private fun setupHeaderAndFab() {
         binding.btnArchivedNotes.setOnClickListener {
             startActivity(Intent(this, ArchivedNotesActivity::class.java))
+        }
+        binding.btnTrash.setOnClickListener {
+            startActivity(Intent(this, TrashActivity::class.java))
         }
         binding.fabAddNote.setOnClickListener {
             startActivity(

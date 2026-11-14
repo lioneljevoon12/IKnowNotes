@@ -45,6 +45,7 @@ class NoteSerializer(serializers.ModelSerializer):
             'color',
             'is_pinned',
             'is_archived',
+            'deleted_at',
             'reminder_time',
             'is_reminded',
             'created_at',
@@ -52,6 +53,7 @@ class NoteSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id',
+            'deleted_at',
             'is_reminded',
             'created_at',
             'updated_at',

@@ -21,6 +21,7 @@ data class Note(
     val color: String?,
     @SerializedName("is_pinned") val isPinned: Boolean,
     @SerializedName("is_archived") val isArchived: Boolean,
+    @SerializedName("deleted_at") val deletedAt: String? = null,
     @SerializedName("reminder_time") val reminderTime: String? = null,
     @SerializedName("is_reminded") val isReminded: Boolean = false,
     @SerializedName("created_at") val createdAt: String? = null,

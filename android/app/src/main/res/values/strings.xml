@@ -44,8 +44,29 @@
     <string name="action_delete">Hapus</string>
     <string name="action_archive">Arsipkan</string>
     <string name="action_unarchive">Batal arsip</string>
-    <string name="confirm_delete_title">Hapus catatan?</string>
-    <string name="confirm_delete_message">Catatan yang dihapus tidak bisa dikembalikan.</string>
+    <string name="confirm_delete_title">Pindahkan ke sampah?</string>
+    <string name="confirm_delete_message">Catatan akan disimpan di sampah selama 30 hari dan bisa dipulihkan.</string>
+    <string name="action_move_to_trash">Buang</string>
+    <string name="note_moved_to_trash">Catatan dipindahkan ke sampah</string>
+
+    <!-- Trash -->
+    <string name="title_trash">Sampah</string>
+    <string name="action_open_trash">Sampah</string>
+    <string name="trash_info">Catatan di sini dihapus permanen setelah 30 hari.</string>
+    <string name="empty_trash_title">Sampah kosong</string>
+    <string name="empty_trash_subtitle">Catatan yang kamu hapus akan muncul di sini</string>
+    <string name="action_empty_trash">Kosongkan</string>
+    <string name="action_restore">Pulihkan</string>
+    <string name="action_delete_permanently">Hapus permanen</string>
+    <string name="confirm_empty_trash_title">Kosongkan sampah?</string>
+    <string name="confirm_empty_trash_message">Semua catatan di sampah akan dihapus permanen dan tidak bisa dikembalikan.</string>
+    <string name="confirm_permanent_delete_title">Hapus permanen?</string>
+    <string name="confirm_permanent_delete_message">Catatan ini akan dihapus selamanya dan tidak bisa dikembalikan.</string>
+    <string name="trash_days_left">Dihapus permanen dalam %1$d hari</string>
+    <string name="trash_less_than_a_day">Dihapus permanen kurang dari 1 hari lagi</string>
+    <string name="note_restored">Catatan dipulihkan</string>
+    <string name="note_deleted_permanently">Catatan dihapus permanen</string>
+    <string name="trash_emptied">Sampah dikosongkan</string>
 
     <!-- Note edit -->
     <string name="hint_note_title">Judul catatan</string>

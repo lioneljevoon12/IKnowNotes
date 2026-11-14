@@ -33,8 +33,21 @@ class NotesRepository(private val api: ApiService) {
     suspend fun updateNote(id: Int, request: NoteRequest): Result<Note> =
         safeApiCall { api.updateNote(id, request) }
 
+    /** Soft delete: the note goes to the trash and can be restored. */
     suspend fun deleteNote(id: Int): Result<Unit> =
-        safeApiCall { api.deleteNote(id) }.map { }
+        safeApiCall { api.deleteNote(id) }
+
+    suspend fun getTrashNotes(): Result<List<Note>> =
+        safeApiCall { api.getTrashNotes() }
+
+    suspend fun restoreNote(id: Int): Result<Unit> =
+        safeApiCall { api.restoreNote(id) }
+
+    suspend fun permanentlyDeleteNote(id: Int): Result<Unit> =
+        safeApiCall { api.permanentlyDeleteNote(id) }
+
+    suspend fun emptyTrash(): Result<Unit> =
+        safeApiCall { api.emptyTrash() }
 
     suspend fun archiveNote(id: Int): Result<Unit> =
         safeApiCall { api.archiveNote(id) }.map { }
