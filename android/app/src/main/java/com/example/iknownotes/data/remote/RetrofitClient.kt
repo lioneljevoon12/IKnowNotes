@@ -12,15 +12,17 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
 
     /**
-     * 10.0.2.2 is the special alias the Android emulator uses to reach
-     * "localhost" on the machine running Android Studio, i.e. your
+     * Set at build time (see app/build.gradle.kts). The default 10.0.2.2 is the alias
+     * the Android emulator uses to reach "localhost" on your computer, i.e.
      * `python manage.py runserver` on port 8000.
      *
-     * - Testing on a physical device on the same Wi-Fi: replace with your
-     *   computer's LAN IP, e.g. "http://192.168.1.5:8000/".
-     * - Deployed backend: swap in the real domain/https URL.
+     * - Real phone on the same Wi-Fi: build with your computer's LAN IP, e.g.
+     *   `./gradlew assembleDebug -PbaseUrl=http://192.168.1.5:8000/`
+     * - Deployed backend: pass the real domain, e.g. -PbaseUrl=https://notes.example.com/
+     *
+     * It can also live in gradle.properties as `baseUrl=...`.
      */
-    const val BASE_URL = "http://10.0.2.2:8000/"
+    const val BASE_URL = com.example.iknownotes.BuildConfig.BASE_URL
 
     @Volatile
     private var sessionManager: SessionManager? = null

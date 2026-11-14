@@ -17,6 +17,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Backend address baked into the app. Override per build with -PbaseUrl=... or
+        // `baseUrl=...` in gradle.properties; the default reaches your PC from the emulator.
+        val baseUrl = (project.findProperty("baseUrl") as String?) ?: "http://10.0.2.2:8000/"
+        buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
     }
 
     buildTypes {
@@ -37,6 +42,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
