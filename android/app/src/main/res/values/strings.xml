@@ -76,6 +76,18 @@
     <string name="folder_none">Tanpa folder</string>
     <string name="error_title_required">Judul catatan tidak boleh kosong</string>
 
+    <!-- Checklist, share and export -->
+    <string name="action_checklist">Checklist</string>
+    <string name="share_title">Bagikan &amp; ekspor</string>
+    <string name="share_as_text">Bagikan sebagai teks</string>
+    <string name="copy_text">Salin teks</string>
+    <string name="export_txt">Ekspor ke TXT</string>
+    <string name="export_pdf">Ekspor ke PDF</string>
+    <string name="text_copied">Teks disalin</string>
+    <string name="export_success">Berhasil diekspor</string>
+    <string name="export_failed">Gagal mengekspor catatan</string>
+    <string name="export_meta_updated">Terakhir diubah %1$s</string>
+
     <!-- Sort, filter and view mode -->
     <string name="filter_button">Urutkan &amp; filter</string>
     <string name="filter_title">Urutkan &amp; filter</string>

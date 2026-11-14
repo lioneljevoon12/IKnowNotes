@@ -52,6 +52,15 @@ object RichTextHelper {
         toggleNumberedList(editText.text, start, end)
     }
 
+    fun applyChecklist(editText: EditText) {
+        val start = editText.selectionStart.coerceAtLeast(0)
+        val end = editText.selectionEnd.coerceAtLeast(start)
+        // Edits come last-first, so applying them in order never shifts the next one.
+        ChecklistHelper.toggleChecklist(editText.text.toString(), start, end).forEach {
+            editText.text.replace(it.start, it.end, it.replacement)
+        }
+    }
+
     private fun getSelectionOrWordRange(editText: EditText): Pair<Int, Int> {
         val start = editText.selectionStart
         val end = editText.selectionEnd
@@ -155,7 +164,8 @@ object RichTextHelper {
             lines.map { it.removePrefix("• ") }
         } else {
             lines.map { line ->
-                val cleaned = line.replace(Regex("""^\d+\.\s"""), "").removePrefix("• ")
+                val cleaned = ChecklistHelper.stripPrefix(line)
+                    .replace(Regex("""^\d+\.\s"""), "").removePrefix("• ")
                 "• $cleaned"
             }
         }
@@ -175,7 +185,8 @@ object RichTextHelper {
             lines.map { it.replace(numberRegex, "") }
         } else {
             lines.mapIndexed { index, line ->
-                val cleaned = line.replace(numberRegex, "").removePrefix("• ")
+                val cleaned = ChecklistHelper.stripPrefix(line)
+                    .replace(numberRegex, "").removePrefix("• ")
                 "${index + 1}. $cleaned"
             }
         }

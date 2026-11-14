@@ -1,10 +1,21 @@
 package com.example.iknownotes.ui.notedetail
 
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StrikethroughSpan
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.iknownotes.R
@@ -14,11 +25,15 @@ import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteDetailBinding
 import com.example.iknownotes.ui.noteedit.NoteEditActivity
 import com.example.iknownotes.reminder.ReminderScheduler
+import com.example.iknownotes.util.ChecklistHelper
 import com.example.iknownotes.util.NoteColorPalette
+import com.example.iknownotes.util.NoteExporter
 import com.example.iknownotes.util.ReminderHelper
 import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class NoteDetailActivity : AppCompatActivity() {
 
@@ -27,6 +42,18 @@ class NoteDetailActivity : AppCompatActivity() {
     private var noteId: Int = -1
     private var currentNote: Note? = null
     private var folders: List<com.example.iknownotes.data.model.Folder> = emptyList()
+
+    /** The note's content as shown (without the display-only checklist styling). */
+    private var currentBody: Spanned = SpannableStringBuilder("")
+
+    private val exportTxtLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri != null) exportTo(uri, pdf = false)
+        }
+    private val exportPdfLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+            if (uri != null) exportTo(uri, pdf = true)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +73,7 @@ class NoteDetailActivity : AppCompatActivity() {
         binding.btnDelete.setOnClickListener { confirmDelete() }
         binding.btnArchive.setOnClickListener { toggleArchive() }
         binding.btnPin.setOnClickListener { togglePin() }
+        binding.btnShare.setOnClickListener { showShareMenu() }
 
         loadFolders()
         loadNote()
@@ -81,7 +109,7 @@ class NoteDetailActivity : AppCompatActivity() {
         currentNote = note
         binding.progress.visibility = View.GONE
         binding.tvTitle.text = note.title
-        binding.tvContent.text = RichTextHelper.fromHtml(note.content)
+        renderContent(note)
         val folderName = folders.firstOrNull { it.id == note.folder }?.name
         if (folderName != null) {
             binding.tvFolder.text = folderName
@@ -107,6 +135,143 @@ class NoteDetailActivity : AppCompatActivity() {
         binding.btnArchive.setImageResource(
             if (note.isArchived) R.drawable.ic_unarchive else R.drawable.ic_archive
         )
+    }
+
+    /**
+     * Shows the note body. Checklist boxes become tappable (ticking one saves right
+     * away) and ticked items are struck through; that styling is display-only.
+     */
+    private fun renderContent(note: Note) {
+        val body = RichTextHelper.fromHtml(note.content)
+        currentBody = body
+
+        val display = SpannableStringBuilder(body)
+        val items = ChecklistHelper.items(display.toString())
+        for (item in items) {
+            display.setSpan(object : ClickableSpan() {
+                override fun onClick(widget: View) = toggleChecklistItem(item.lineStart)
+                override fun updateDrawState(ds: TextPaint) {
+                    ds.isUnderlineText = false // keep the text colour, no link styling
+                }
+            }, item.lineStart, item.lineStart + 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+            if (item.checked && item.lineEnd > item.lineStart + 2) {
+                display.setSpan(StrikethroughSpan(), item.lineStart + 2, item.lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                display.setSpan(
+                    ForegroundColorSpan(getColor(R.color.text_secondary)),
+                    item.lineStart + 2, item.lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+        }
+
+        // Tappable boxes need link handling, which cannot be combined with text selection;
+        // notes without a checklist stay selectable and the share menu can copy the rest.
+        if (items.isEmpty()) {
+            binding.tvContent.setTextIsSelectable(true)
+        } else {
+            binding.tvContent.setTextIsSelectable(false)
+            binding.tvContent.movementMethod = LinkMovementMethod.getInstance()
+        }
+        binding.tvContent.text = display
+    }
+
+    private fun toggleChecklistItem(lineStart: Int) {
+        val note = currentNote ?: return
+        val edit = ChecklistHelper.toggleItem(currentBody.toString(), lineStart) ?: return
+        val edited = SpannableStringBuilder(currentBody)
+        edited.replace(edit.start, edit.end, edit.replacement)
+
+        // Show the change at once; saving is local-first and quick.
+        val updated = note.copy(content = RichTextHelper.toHtml(edited))
+        currentNote = updated
+        renderContent(updated)
+
+        val request = NoteRequest(
+            folder = updated.folder,
+            title = updated.title,
+            content = updated.content,
+            color = updated.color,
+            isPinned = updated.isPinned,
+            reminderTime = updated.reminderTime
+        )
+        lifecycleScope.launch {
+            notesRepository.updateNote(noteId, request)
+                .onFailure {
+                    showSnackbar(it.message ?: "Gagal menyimpan centang")
+                    loadNote()
+                }
+        }
+    }
+
+    // ------------------------------------------------------- share & export
+
+    private fun bodyText(note: Note): String = RichTextHelper.fromHtml(note.content).toString().trim()
+
+    private fun showShareMenu() {
+        val note = currentNote ?: return
+        val options = arrayOf(
+            getString(R.string.share_as_text),
+            getString(R.string.copy_text),
+            getString(R.string.export_txt),
+            getString(R.string.export_pdf)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.share_title)
+            .setItems(options) { _, which ->
+                val fileName = NoteExporter.safeFileName(note.title)
+                when (which) {
+                    0 -> shareAsText(note)
+                    1 -> copyText(note)
+                    2 -> exportTxtLauncher.launch("$fileName.txt")
+                    3 -> exportPdfLauncher.launch("$fileName.pdf")
+                }
+            }
+            .show()
+    }
+
+    private fun shareAsText(note: Note) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, note.title)
+            putExtra(Intent.EXTRA_TEXT, NoteExporter.shareText(note.title, bodyText(note)))
+        }
+        startActivity(Intent.createChooser(send, getString(R.string.share_title)))
+    }
+
+    private fun copyText(note: Note) {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(note.title, NoteExporter.shareText(note.title, bodyText(note)))
+        )
+        Toast.makeText(this, R.string.text_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun exportTo(uri: Uri, pdf: Boolean) {
+        val note = currentNote ?: return
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    val body = RichTextHelper.fromHtml(note.content)
+                    val out = contentResolver.openOutputStream(uri, "wt")
+                        ?: error("Tidak bisa membuka file tujuan")
+                    out.use {
+                        if (pdf) {
+                            val updated = ReminderHelper.parseIso(note.updatedAt)?.let { millis ->
+                                getString(R.string.export_meta_updated, ReminderHelper.formatDisplay(millis))
+                            }
+                            NoteExporter.writePdf(it, note.title, body, updated)
+                        } else {
+                            NoteExporter.writeText(it, note.title, body.toString())
+                        }
+                    }
+                }.isSuccess
+            }
+            Toast.makeText(
+                this@NoteDetailActivity,
+                if (saved) R.string.export_success else R.string.export_failed,
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun openEdit() {

@@ -241,6 +241,15 @@
                 android:contentDescription="Bullet list" />
 
             <ImageButton
+                android:id="@+id/btn_checklist"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_checklist"
+                app:tint="@color/blue_on_primary"
+                android:contentDescription="@string/action_checklist" />
+
+            <ImageButton
                 android:id="@+id/btn_numbered_list"
                 android:layout_width="34dp"
                 android:layout_height="34dp"

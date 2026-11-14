@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.view.Gravity
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -31,6 +33,8 @@ import com.example.iknownotes.data.model.Note
 import com.example.iknownotes.data.model.NoteRequest
 import com.example.iknownotes.data.repo.NotesRepository
 import com.example.iknownotes.databinding.ActivityNoteEditBinding
+import com.example.iknownotes.util.ChecklistEnterWatcher
+import com.example.iknownotes.util.ChecklistHelper
 import com.example.iknownotes.util.NoteColorPalette
 import com.example.iknownotes.util.RichTextHelper
 import com.google.android.material.snackbar.Snackbar
@@ -207,6 +211,47 @@ class NoteEditActivity : AppCompatActivity() {
         binding.btnNumberedList.setOnClickListener {
             RichTextHelper.applyNumberedList(binding.etContent)
             onEditorChanged()
+        }
+        binding.btnChecklist.setOnClickListener {
+            RichTextHelper.applyChecklist(binding.etContent)
+            onEditorChanged()
+        }
+        setupChecklistBehaviour()
+    }
+
+    /** Enter continues a checklist, and tapping a box ticks it. */
+    private fun setupChecklistBehaviour() {
+        binding.etContent.addTextChangedListener(ChecklistEnterWatcher(binding.etContent))
+
+        val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                toggleChecklistItemAt(e.x, e.y)
+                return false // let the EditText place the cursor as usual
+            }
+        })
+        binding.etContent.setOnTouchListener { _, event ->
+            detector.onTouchEvent(event)
+            false
+        }
+    }
+
+    private fun toggleChecklistItemAt(x: Float, y: Float) {
+        val editText = binding.etContent
+        val layout = editText.layout ?: return
+        val localX = x - editText.totalPaddingLeft + editText.scrollX
+        val localY = y - editText.totalPaddingTop + editText.scrollY
+        if (localY < 0 || localY > layout.height) return
+
+        val lineStart = layout.getLineStart(layout.getLineForVertical(localY.toInt()))
+        val text = editText.text.toString()
+        if (!ChecklistHelper.isChecklistLine(text, lineStart)) return
+
+        // Only the box (plus a little slack) counts, not the whole line.
+        val boxRight = layout.getPrimaryHorizontal(lineStart + 1)
+        if (localX > boxRight + 12 * resources.displayMetrics.density) return
+
+        ChecklistHelper.toggleItem(text, lineStart)?.let {
+            editText.text.replace(it.start, it.end, it.replacement)
         }
     }
 
