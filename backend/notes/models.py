@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.contrib.auth.models import User
 
 
@@ -55,3 +57,33 @@ class Note(models.Model):
 
     def __str__(self):
         return self.title
+
+
+def attachment_upload_path(instance, filename):
+    # The file name was already replaced by an unguessable uuid in the validator.
+    return f'attachments/user_{instance.note.user_id}/{filename}'
+
+
+class Attachment(models.Model):
+    note = models.ForeignKey(
+        Note,
+        on_delete=models.CASCADE,
+        related_name='attachments'
+    )
+    file = models.FileField(upload_to=attachment_upload_path)
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return self.original_name
+
+
+@receiver(post_delete, sender=Attachment)
+def delete_attachment_file(sender, instance, **kwargs):
+    # Runs for single deletes and for cascades (deleting a note), so files never linger.
+    instance.file.delete(save=False)

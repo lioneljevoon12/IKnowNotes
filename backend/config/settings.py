@@ -109,6 +109,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Uploaded note attachments. They are served only through the authenticated
+# /api/attachments/<id>/file/ endpoint, never as public static files.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',

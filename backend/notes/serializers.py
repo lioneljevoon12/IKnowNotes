@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Folder, Note
+from .models import Attachment, Folder, Note
 from django.contrib.auth.models import User
 
 
@@ -15,7 +15,16 @@ class FolderSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
+class AttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attachment
+        fields = ['id', 'original_name', 'content_type', 'size', 'created_at']
+        read_only_fields = fields
+
+
 class NoteSerializer(serializers.ModelSerializer):
+    attachments = AttachmentSerializer(many=True, read_only=True)
+
     folder = serializers.PrimaryKeyRelatedField(
         queryset=Folder.objects.all(),
         required=False,
@@ -48,12 +57,14 @@ class NoteSerializer(serializers.ModelSerializer):
             'deleted_at',
             'reminder_time',
             'is_reminded',
+            'attachments',
             'created_at',
             'updated_at',
         ]
         read_only_fields = [
             'id',
             'deleted_at',
+            'attachments',
             'is_reminded',
             'created_at',
             'updated_at',
